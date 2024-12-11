@@ -145,11 +145,12 @@ const CosturiAditionale: React.FC = () => {
       <Table
         dataSource={spectacole}
         columns={[
-          { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu' },
-          { title: 'Data', dataIndex: 'data', key: 'data' },
+          { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu', align: 'center', },
+          { title: 'Data', dataIndex: 'data', key: 'data', align: 'center', },
           {
             title: 'Costuri',
             dataIndex: 'colaboratori',
+            align: 'center',
             render: (colaboratori) => (
               <ul className="colaborator-list">
                 {renderColaboratorPayments(colaboratori)}
@@ -160,6 +161,7 @@ const CosturiAditionale: React.FC = () => {
             title: 'Total',
             dataIndex: 'colaboratori',
             key: 'totalCosturi',
+            align: 'center',
             render: (colaboratori) => `${calculateTotalCosturiPerShow(colaboratori)} lei`,
           },
         ]}
