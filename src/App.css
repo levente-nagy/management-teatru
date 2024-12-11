@@ -1,0 +1,13 @@
+.ant-table-column-sorter-inner{display: none !important;}
+.ant-table-thead{pointer-events: none;}
+td.ant-table-cell{background: #ffffff !important; font-size: smaller;}
+.tabbutton{color: #076dcd !important;}
+.actor-list, .colaborator-list {
+    list-style-type: none;
+    padding: 0;
+  }
+
+  .actor-list li, .colaborator-list li {
+    margin-bottom: 10px;
+  }
+
