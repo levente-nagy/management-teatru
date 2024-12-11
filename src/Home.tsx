@@ -69,19 +69,19 @@ const Home: React.FC = () => {
   const renderLayout = () => {
     switch (selectedItem) {
       case '1':
-        return <Content style={{ margin: '0 16px' }}>
+        return <Content style={{ margin: windowWidth < 1920 ? '0 32px 0 16px' : '0 16px' }}>
          <Actori />
         </Content>;
       case '2':
-        return <Content style={{ margin: '0 16px' }}>
+        return <Content style={{ margin: windowWidth < 1920 ? '0 32px 0 16px' : '0 16px' }}>
        <Spectacole />
         </Content>;
       case '3':
-        return <Content style={{ margin: '0 16px' }}>
+        return <Content style={{ margin: windowWidth < 1920 ? '0 32px 0 16px' : '0 16px' }}>
          <Bilete />
         </Content>;
         case '4':
-        return <Content style={{ margin: '0 16px' }}>
+          return <Content style={{ margin: windowWidth < 1920 ? '0 32px 0 16px' : '0 16px' }}>
          <Costuri />
         </Content>;
       default:

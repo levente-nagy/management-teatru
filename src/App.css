@@ -1,6 +1,6 @@
 .ant-table-column-sorter-inner{display: none !important;}
 .ant-table-thead{pointer-events: none;}
-td.ant-table-cell{background: #ffffff !important; font-size: smaller;}
+td.ant-table-cell{background: #ffffff !important; }
 .tabbutton{color: #076dcd !important;}
 .actor-list, .colaborator-list {
     list-style-type: none;
@@ -11,3 +11,6 @@ td.ant-table-cell{background: #ffffff !important; font-size: smaller;}
     margin-bottom: 10px;
   }
 
+body{
+  overflow-x: hidden;
+}
