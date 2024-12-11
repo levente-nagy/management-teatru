@@ -79,13 +79,11 @@ const CosturiAditionale: React.FC = () => {
     }
   };
 
-  // Fetch spectacole data and colaborator payments on mount
   useEffect(() => {
     fetchSpectacoleData();
     fetchColaboratorPayments();
   }, []);
 
-  // Fetch colaborator names whenever colaboratorPayments is updated
   useEffect(() => {
     if (colaboratorPayments.length > 0) {
       fetchColaboratorNames();
@@ -100,7 +98,6 @@ const CosturiAditionale: React.FC = () => {
     ));
   };
 
-  // Calculate total cost based on filtered spectacole
   const calculateTotalCosturi = () => {
     let totalCost = 0;
     spectacole.forEach((spectacol) => {
