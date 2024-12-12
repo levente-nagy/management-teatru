@@ -528,6 +528,7 @@ const fetchColaboratorData = async () => {
           style={{ width: 150 }}
           addonAfter="lei"
           min="1"
+          maxLength={10}
               parser={(value) => value?.replace(/\D/g, '') || ''} 
               onKeyDown={(event) => {
                 if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {

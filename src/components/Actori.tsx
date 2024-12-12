@@ -285,7 +285,7 @@ const Actori: React.FC = () => {
                 name="perioada_contract"
                 rules={[{ required: true, message: 'Introduceți perioada contractuală!' }]}
               >
-                <InputNumber maxLength={10} min="1" style={{ width: 150 }} addonAfter="luni" 
+                <InputNumber maxLength={3} min="1" style={{ width: 150 }} addonAfter="luni" 
                   parser={(value) => value?.replace(/\D/g, '') || ''} 
                   onKeyDown={(event) => {
                     if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
