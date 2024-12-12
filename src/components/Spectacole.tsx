@@ -525,12 +525,25 @@ const fetchColaboratorData = async () => {
         rules={[{ required: true, message: 'Introduceți plata pentru colaborator!' }]}
       >
         <InputNumber
-          min={1}
           style={{ width: 150 }}
           addonAfter="lei"
+          min="1"
+              parser={(value) => value?.replace(/\D/g, '') || ''} 
+              onKeyDown={(event) => {
+                if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                  event.preventDefault(); 
+                }
+              }}
+              onPaste={(event) => {
+                const pasteData = event.clipboardData.getData('text');
+                if (!/^\d+$/.test(pasteData)) {
+                  event.preventDefault(); 
+                }
+              }}
           onChange={(value) => {
-            setColaboratorPayments((prev) => ({ ...prev, [colaboratorId]: value || 0 }));
+            setColaboratorPayments((prev) => ({ ...prev, [colaboratorId]: Number(value) || 0 }));
           }}
+          
         />
       </Form.Item>
     );

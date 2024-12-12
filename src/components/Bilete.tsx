@@ -185,14 +185,44 @@ const Bilete: React.FC = () => {
             label="Număr bilete"
             name="nr_bilete"
             rules={[{ required: true, message: 'Introduceți numărul de bilete!' }]}>
-            <InputNumber style={{ width: 150 }} min={1} />
+            <InputNumber
+              style={{ width: 150 }}
+              min="1"
+              parser={(value) => value?.replace(/\D/g, '') || ''} 
+              onKeyDown={(event) => {
+                if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                  event.preventDefault(); 
+                }
+              }}
+              onPaste={(event) => {
+                const pasteData = event.clipboardData.getData('text');
+                if (!/^\d+$/.test(pasteData)) {
+                  event.preventDefault(); 
+                }
+              }}
+            />
+
           </Form.Item>
 
           <Form.Item
             label="Preț"
             name="pret"
             rules={[{ required: true, message: 'Introduceți prețul biletului!' }]}>
-            <InputNumber style={{ width: 150 }} min={0} addonAfter="lei" />
+            <InputNumber style={{ width: 150 }}  addonAfter="lei" 
+              min="1"
+              parser={(value) => value?.replace(/\D/g, '') || ''} 
+              onKeyDown={(event) => {
+                if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                  event.preventDefault(); 
+                }
+              }}
+              onPaste={(event) => {
+                const pasteData = event.clipboardData.getData('text');
+                if (!/^\d+$/.test(pasteData)) {
+                  event.preventDefault(); 
+                }
+              }}
+            />
           </Form.Item>
 
           <Form.Item>

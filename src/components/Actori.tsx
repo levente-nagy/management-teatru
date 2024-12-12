@@ -196,16 +196,17 @@ const Actori: React.FC = () => {
             <InputNumber
               maxLength={13}
               style={{ width: 200 }}
-              parser={(value) => value?.replace(/\D/g, '') || ''} // Remove non-digit characters
+              min="1"
+              parser={(value) => value?.replace(/\D/g, '') || ''} 
               onKeyDown={(event) => {
                 if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
-                  event.preventDefault(); // Prevent non-digit characters except for navigation keys
+                  event.preventDefault(); 
                 }
               }}
               onPaste={(event) => {
                 const pasteData = event.clipboardData.getData('text');
                 if (!/^\d+$/.test(pasteData)) {
-                  event.preventDefault(); // Prevent pasting non-digits
+                  event.preventDefault(); 
                 }
               }}
             />
@@ -253,7 +254,20 @@ const Actori: React.FC = () => {
                 name="salariu_brut"
                 rules={[{ required: true, message: 'Introduceți salariul brut!' }]}
               >
-                <InputNumber maxLength={10} min="1" style={{ width: 150 }} addonAfter="lei" />
+                <InputNumber maxLength={10} min="1" style={{ width: 150 }} addonAfter="lei" 
+                  parser={(value) => value?.replace(/\D/g, '') || ''} 
+                  onKeyDown={(event) => {
+                    if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                      event.preventDefault(); 
+                    }
+                  }}
+                  onPaste={(event) => {
+                    const pasteData = event.clipboardData.getData('text');
+                    if (!/^\d+$/.test(pasteData)) {
+                      event.preventDefault(); 
+                    }
+                  }}
+                />
               </Form.Item>
             
 
@@ -271,7 +285,20 @@ const Actori: React.FC = () => {
                 name="perioada_contract"
                 rules={[{ required: true, message: 'Introduceți perioada contractuală!' }]}
               >
-                <InputNumber maxLength={10} min="1" style={{ width: 150 }} addonAfter="luni" />
+                <InputNumber maxLength={10} min="1" style={{ width: 150 }} addonAfter="luni" 
+                  parser={(value) => value?.replace(/\D/g, '') || ''} 
+                  onKeyDown={(event) => {
+                    if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                      event.preventDefault(); 
+                    }
+                  }}
+                  onPaste={(event) => {
+                    const pasteData = event.clipboardData.getData('text');
+                    if (!/^\d+$/.test(pasteData)) {
+                      event.preventDefault(); 
+                    }
+                  }}
+                              />
               </Form.Item>
             </>
           )}
