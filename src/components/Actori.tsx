@@ -188,9 +188,29 @@ const Actori: React.FC = () => {
             </Form.Item>
           </Space>
           <Space direction="horizontal" size={15}>
-            <Form.Item label="CNP" name="CNP" rules={[{ required: true, message: 'Introduceți CNP-ul!' }]}>
-              <InputNumber maxLength={13} style={{ width: 200 }} />
-            </Form.Item>
+          <Form.Item
+            label="CNP"
+            name="CNP"
+            rules={[{ required: true, message: 'Introduceți CNP-ul!' }]}
+          >
+            <InputNumber
+              maxLength={13}
+              style={{ width: 200 }}
+              parser={(value) => value?.replace(/\D/g, '') || ''} // Remove non-digit characters
+              onKeyDown={(event) => {
+                if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+                  event.preventDefault(); // Prevent non-digit characters except for navigation keys
+                }
+              }}
+              onPaste={(event) => {
+                const pasteData = event.clipboardData.getData('text');
+                if (!/^\d+$/.test(pasteData)) {
+                  event.preventDefault(); // Prevent pasting non-digits
+                }
+              }}
+            />
+          </Form.Item>
+
             <Form.Item
               label="Carte de identitate"
               name="carte_identitate"
