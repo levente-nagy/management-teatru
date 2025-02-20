@@ -107,7 +107,7 @@ const Home: React.FC = () => {
       <Layout>
       {renderLayout()}
         <Footer style={{ textAlign: 'center' }}>
-          Tema 13 - Cosmin C., Mitica A., Levente N. © {new Date().getFullYear()}
+          Levente NAGY © {new Date().getFullYear()}
         </Footer>
       </Layout>
     </Layout>
