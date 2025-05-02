@@ -60,60 +60,55 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
     };
 
 
-    const fetchSpectacoleData = async (startDate?: string, endDate?: string) => {
-        if (!userId || !canView) {
-            setSpectacole([]);
-            return;
+  const fetchSpectacoleData = async (startDate?: string, endDate?: string) => {
+    try {
+      let querySnapshot;
+      if (startDate && endDate) {
+        const q = query(
+          collection(db, 'spectacole'),
+          where('data', '>=', startDate),
+          where('data', '<=', endDate)
+        );
+        querySnapshot = await getDocs(q);
+      } else {
+        querySnapshot = await getDocs(collection(db, 'spectacole'));
+      }
+      const fetchedData = querySnapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          titlu: data.titlu,
+          data: data.data,
+          colaboratori: data.colaboratori || [],
         };
-        setLoadingSpectacole(true);
-        try {
-            const userSpectacoleCollection = collection(db, 'spectacole');
-            let q;
-            if (startDate && endDate) {
-                q = query(
-                    userSpectacoleCollection,
-                    where('data', '>=', startDate),
-                    where('data', '<=', endDate)
-                );
-            } else {
-                q = query(userSpectacoleCollection);
-            }
-            const querySnapshot = await getDocs(q);
-            const fetchedData = querySnapshot.docs.map((doc) => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    titlu: data.titlu,
-                    data: data.data,
-                    colaboratori: data.colaboratori || [],
-                };
-            });
-            const spectacoleCuColaboratori = fetchedData.filter(spectacol => spectacol.colaboratori && spectacol.colaboratori.length > 0);
-            setSpectacole(spectacoleCuColaboratori);
-            fetchColaboratorNames(spectacoleCuColaboratori);
-        } catch (error) {
-            console.error('Error fetching spectacole:', error);
-            if ((error as any).code === 'failed-precondition') {
-                message.error('Index Firestore necesar pentru filtrarea după dată. Verificați consola Firebase.');
-            } else {
-                message.error('Eroare la preluarea spectacolelor.');
-            }
-        } finally {
-            setLoadingSpectacole(false);
-        }
-    };
+      });
+      setSpectacole(fetchedData);
+    } catch (error) {
+      console.error('Error fetching spectacole:', error);
+    }
+  };
 
-    const fetchColaboratorNames = async (spectacoleData: Spectacol[]) => {
-        if (!userId || !canView) return;
-        try {
-            const colaboratorIds = new Set<string>();
-            spectacoleData.forEach((spectacol) => {
-                (spectacol.colaboratori || []).forEach((colaborator) => {
-                    if (colaborator && colaborator.id) {
-                        colaboratorIds.add(colaborator.id);
-                    }
-                });
-            });
+  const fetchColaboratorPayments = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'spectacole'));
+      const paymentsData = querySnapshot.docs.map((doc) => ({
+        spectacolId: doc.id,
+        colaboratori: doc.data().colaboratori || [],
+      }));
+      setColaboratorPayments(paymentsData);
+    } catch (error) {
+      console.error('Error fetching colaborator payments:', error);
+    }
+  };
+
+  const fetchColaboratorNames = async () => {
+    try {
+      const colaboratorIds = new Set<string>();
+      colaboratorPayments.forEach((spectacol) => {
+        spectacol.colaboratori.forEach((colaborator) => {
+          colaboratorIds.add(colaborator.id);
+        });
+      });
 
             const names: { [key: string]: string } = {};
             await Promise.all(Array.from(colaboratorIds).map(async (id) => {
@@ -164,22 +159,17 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
         ));
       };
 
-      const calculateTotalCosturiColaboratori = () => {
-        let totalCost = 0;
-        spectacole.forEach((spectacol) => {
-          totalCost += calculateTotalCosturiPerShow(spectacol.colaboratori);
-        });
-        return totalCost;
-      };
+  const calculateTotalCosturi = () => {
+    let totalCost = 0;
+    spectacole.forEach((spectacol) => {
+      totalCost += calculateTotalCosturiPerShow(spectacol.colaboratori);
+    });
+    return totalCost;
+  };
 
-      const calculateTotalSalariiAngajati = () => {
-        return angajati.reduce((total, angajat) => total + (angajat.salariu_net ?? 0), 0);
-      };
-
-      const calculateTotalCosturiPerShow = (colaboratori: { id: string; plata: number }[]) => {
-        if (!colaboratori) return 0;
-        return colaboratori.reduce((total, colaborator) => total + (colaborator.plata || 0), 0);
-      };
+  const calculateTotalCosturiPerShow = (colaboratori: any[]) => {
+    return colaboratori.reduce((total, colaborator) => total + colaborator.plata, 0);
+  };
 
       const handleDataSearch = () => {
         if (selectedDataDates) {
@@ -190,92 +180,64 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
         }
       };
 
-      const handleDataResetFilters = () => {
-        setSelectedDataDates(null);
-        fetchSpectacoleData();
-      };
+  const handleDataResetFilters = () => {
+    setSelectedDataDates(null);
+    fetchSpectacoleData();
+    fetchColaboratorPayments();
+    fetchColaboratorNames();
+  };
 
+  return (
+    <div>
+      <br />
+      <Space direction="horizontal" size={15}>
+        <DatePicker.RangePicker
+          format="DD-MM-YYYY"
+          onChange={(dates) => setSelectedDataDates(dates)}
+          value={selectedDataDates}
+        />
+        <Button onClick={handleDataSearch}>
+          Căutare
+        </Button>
 
-    if (!canView) {
-        return <Typography.Text>Nu aveți permisiunea de a vizualiza această secțiune.</Typography.Text>;
-    }
-
-    const angajatiColumns = [
-        { title: 'Nume', dataIndex: 'nume', key: 'nume', sorter: (a: Artist, b: Artist) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' as const },
-        { title: 'Prenume', dataIndex: 'prenume', key: 'prenume' },
-        { title: 'Salariu net (lei)', dataIndex: 'salariu_net', key: 'salariu_net', align: 'right' as const, render: (salariu: number | undefined) => salariu ?? '-', sorter: (a: Artist, b: Artist) => (a.salariu_net ?? 0) - (b.salariu_net ?? 0) },
-    ];
-
-    const spectacoleColumns = [
-        { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu',  sorter: (a: Spectacol, b: Spectacol) => a.titlu.localeCompare(b.titlu), defaultSortOrder: 'ascend' as const},
-        { title: 'Data', dataIndex: 'data', key: 'data'  },
-        {
-            title: 'Costuri colaboratori',
+        <Button onClick={handleDataResetFilters}>
+          Resetare
+        </Button>
+      </Space>
+      <br /><br />
+      <Table
+        dataSource={spectacole}
+        columns={[
+          { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu', align: 'center', },
+          { title: 'Data', dataIndex: 'data', key: 'data', align: 'center', },
+          {
+            title: 'Costuri',
             dataIndex: 'colaboratori',
-            render: (colaboratori: { id: string; plata: number }[]) => (
-                <ul style={{ paddingLeft: 0, listStyle: 'none', textAlign: 'left', display: 'inline-block', margin: 0 }}>
-                    {renderColaboratorPayments(colaboratori)}
-                </ul>
+            align: 'center',
+            render: (colaboratori) => (
+              <ul className="colaborator-list">
+                {renderColaboratorPayments(colaboratori)}
+              </ul>
             ),
-        },
-        {
-            title: 'Total per spectacol (lei)',
+          },
+          {
+            title: 'Total',
             dataIndex: 'colaboratori',
             key: 'totalCosturi',
-            align: 'right' as const,
-            render: (colaboratori: { id: string; plata: number }[]) => `${calculateTotalCosturiPerShow(colaboratori)} lei`,
-        },
-    ];
-
-
-    return (
-        <div>
-            <Typography.Title level={4}>Salarii angajați</Typography.Title>
-            <Table
-                dataSource={angajati}
-                columns={angajatiColumns}
-                loading={loadingAngajati}
-                rowKey="id"
-                pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                size="small"
-                scroll={{ x: 'max-content' }}
-                footer={() => (
-                    <div style={{ textAlign: 'right' }}>
-                        <Typography.Text strong>Total salarii: {calculateTotalSalariiAngajati()} lei</Typography.Text>
-                    </div>
-                )}
-            />
-
-            <Typography.Title level={4} style={{ marginTop: 24 }}>Costuri colaboratori</Typography.Title>
-            <Space direction="horizontal" size={15} style={{ marginBottom: 16 }}>
-                <DatePicker.RangePicker
-                    format="DD-MM-YYYY"
-                    value={selectedDataDates}
-                    onChange={(dates) => setSelectedDataDates(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
-                />
-                <Button onClick={handleDataSearch} disabled={!selectedDataDates}>
-                    Căutare
-                </Button>
-                <Button onClick={handleDataResetFilters}>
-                    Resetare
-                </Button>
-            </Space>
-            <Table
-                dataSource={spectacole}
-                loading={loadingSpectacole}
-                columns={spectacoleColumns}
-                pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                rowKey="id"
-                size="small"
-                scroll={{ x: 'max-content' }}
-                footer={() => (
-                    <div style={{ textAlign: 'right' }}>
-                        <Typography.Text strong>Total costuri: {calculateTotalCosturiColaboratori()} lei</Typography.Text>
-                    </div>
-                )}
-            />
-        </div>
-    );
+            align: 'center',
+            render: (colaboratori) => `${calculateTotalCosturiPerShow(colaboratori)} lei`,
+          },
+        ]}
+        pagination={false}
+        rowKey="id"
+        footer={() => (
+          <div style={{ textAlign: 'right' }}>
+            Total costuri: {calculateTotalCosturi()} lei
+          </div>
+        )}
+      />
+    </div>
+  );
 };
 
 export default Costuri;
