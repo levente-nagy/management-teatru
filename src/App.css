@@ -1,7 +1,7 @@
 .ant-table-column-sorter-inner{display: none !important;}
 .ant-table-thead{pointer-events: none;}
 td.ant-table-cell{background: #ffffff !important; }
-.tabbutton{color: #076dcd !important;}
+.ant-table-column-sort{background: #fafafa !important; }
 .actor-list, .colaborator-list {
     list-style-type: none;
     padding: 0;
@@ -13,4 +13,21 @@ td.ant-table-cell{background: #ffffff !important; }
 
 body{
   overflow-x: hidden;
+}
+
+.banner{
+  width: 15rem;
+  max-width: 100%;
+}
+
+.ant-layout-footer{
+  padding: 13px 45px;
+}
+
+button:hover {
+  border-color: lightgray !important;
+}
+
+.tabbutton:hover,  .ant-btn-icon-only:hover {
+  color: #ffcf3d !important;
 }
