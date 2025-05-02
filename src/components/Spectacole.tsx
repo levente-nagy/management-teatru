@@ -673,7 +673,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
         scroll={{ x: 'max-content' }}
         footer={canViewFinancials ? () => (
           <div style={{textAlign: 'right'}}>
-              Total încasări: {calculateTotalEarnings(data, bilete)} lei
+              <strong>Total încasări: {calculateTotalEarnings(data, bilete)} lei</strong
           </div>
         ) : undefined}
       />
