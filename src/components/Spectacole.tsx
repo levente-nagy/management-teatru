@@ -271,7 +271,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
   useEffect(() => {
 
       if (userRole === 'Artist') {
-          console.log("Artist-specific useEffect triggered. Loading Artist ID:", loadingArtistId); // Log trigger
+          console.log("Artist-specific useEffect triggered. Loading Artist ID:", loadingArtistId); 
 
           if (!loadingArtistId) {
               fetchSpectacolData();
@@ -575,28 +575,35 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
 
 
   const columns: TableProps<Spectacol>['columns'] = [
-    { title: 'Titlu', dataIndex: 'titlu', key: 'titlu', width: 150, sorter: (a, b) => a.titlu.localeCompare(b.titlu), defaultSortOrder: 'ascend' },
-    { title: 'Data', dataIndex: 'data', key: 'data', width: 150 },
-    { title: 'Ora', dataIndex: 'ora', key: 'ora', width: 150 },
-    { title: 'Durata', dataIndex: 'durata', key: 'durata', width: 150 },
+    { title: 'Titlu', dataIndex: 'titlu', key: 'titlu', width: 200, sorter: (a, b) => a.titlu.localeCompare(b.titlu), defaultSortOrder: 'ascend' },
+    { title: 'Data', dataIndex: 'data', key: 'data', width: 100 },
+    { title: 'Ora', dataIndex: 'ora', key: 'ora', width: 100 },
+    { title: 'Durata', dataIndex: 'durata', key: 'durata', width: 100 },
     {
       title: 'Detalii',
       key: 'detalii',
 
-      width: 10,
+      width: 100,
       render: (_, record) => (
-        <Space direction="vertical" size={1}>
-          <Button type="link" style={{ color: 'black' }} icon={<TeamOutlined />} onClick={() => showDistributieModal(record.key)} className='tabbutton'>
-            Distribuție
-          </Button>
-          <Button type="link" style={{ color: 'black' }} icon={<EyeOutlined /> } onClick={() => showBileteModal(record.key)} className='tabbutton'>
-            Bilete
-          </Button>
+       
+        <Space direction="horizontal" size={3}>
+          <Tooltip title="Distribuție">
+            <Button type="link" style={{ color: 'black' }} icon={<TeamOutlined />} onClick={() => showDistributieModal(record.key)} className='tabbutton' />
+          </Tooltip>
+            
+          <Tooltip title="Bilete">
+            <Button type="link" style={{ color: 'black' }} icon={<DollarOutlined />} onClick={() => showBileteModal(record.key)} className='tabbutton' />
+          </Tooltip>
+    
+      
+          
           {canViewFinancials && (
-            <Button type="link" style={{ color: 'black' }} icon={<DollarOutlined />} onClick={() => showIncasariModal(record.key)} className='tabbutton'>
-              Încasări
-            </Button>
+            <Tooltip title="Încasări">
+              <Button type="link" style={{ color: 'black' }} icon={<EyeOutlined />} onClick={() => showIncasariModal(record.key)} className='tabbutton' />
+            </Tooltip>
+      
           )}
+        
         </Space>
       ),
     },
@@ -673,7 +680,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
         scroll={{ x: 'max-content' }}
         footer={canViewFinancials ? () => (
           <div style={{textAlign: 'right'}}>
-              Total încasări (perioada afișată): {calculateTotalEarnings(data, bilete)} lei
+              <Typography.Text strong>Total încasări: {calculateTotalEarnings(data, bilete)} lei</Typography.Text>
           </div>
         ) : undefined}
       />
@@ -898,7 +905,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
               rowKey="categorie_bilet"
               pagination={false}
               size="small"
-              footer={() => <div style={{textAlign: 'right'}}><b>Total: {totalEarnings} lei</b></div>}
+              footer={() => <div style={{textAlign: 'right'}}><Typography.Text strong>Total: {totalEarnings} lei</Typography.Text></div>}
             />
             <br />
           </>

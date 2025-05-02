@@ -252,9 +252,9 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
     { title: 'CNP', dataIndex: 'CNP', key: 'CNP',  width: 60 },
     { title: 'Carte identitate', dataIndex: 'carte_identitate', key: 'carte_identitate',  width: 60 },
     { title: 'Tip contract', dataIndex: 'tip_contract', key: 'tip_contract',  width: 60 },
-    { title: 'Salariu brut', dataIndex: 'salariu_brut', key: 'salariu_brut',  width: 60, render: (val) => val ? `${val} lei` : '-' },
-    { title: 'Impozite', dataIndex: 'impozite', key: 'impozite',  width: 60, render: (val) => val ? `${val} lei` : '-' },
-    { title: 'Salariu net', dataIndex: 'salariu_net', key: 'salariu_net',  width: 60, render: (val) => val ? `${val} lei` : '-' },
+    { title: 'Salariu brut (lei)', dataIndex: 'salariu_brut', key: 'salariu_brut',  width: 60, render: (val) => val || '-' },
+    { title: 'Impozite (lei)', dataIndex: 'impozite', key: 'impozite',  width: 60, render: (val) => val || '-' },
+    { title: 'Salariu net (lei)', dataIndex: 'salariu_net', key: 'salariu_net',  width: 60, render: (val) => val || '-' },
     { title: 'Data început', dataIndex: 'data_inceput_contract', key: 'data_inceput_contract',  width: 60 },
     { title: 'Perioadă (luni)', dataIndex: 'perioada_contract', key: 'perioada_contract',  width: 60, render: (val) => val || '-' },
   ] : [];
@@ -404,12 +404,16 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
 
           {canViewSensitiveData && (
             <>
-              <Form.Item
+<Form.Item
                 label="Tip contract"
                 name="tip_contract"
                 rules={[{ required: true, message: 'Selectați tipul contractului!' }]}
               >
-                <Select style={{ width: 415 }} placeholder="Selectați tipul">
+                <Select
+                  style={{ width: 415 }}
+                  placeholder="Selectați tipul"
+                  disabled={!!editingActor}
+                >
                   <Select.Option value="Angajat">Angajat</Select.Option>
                   <Select.Option value="Colaborator">Colaborator</Select.Option>
                 </Select>
