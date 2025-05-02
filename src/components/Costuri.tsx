@@ -201,16 +201,16 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
     }
 
     const angajatiColumns = [
-        { title: 'Nume', dataIndex: 'nume', key: 'nume', sorter: (a: Artist, b: Artist) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' as const },
-        { title: 'Prenume', dataIndex: 'prenume', key: 'prenume' },
-        { title: 'Salariu net (lei)', dataIndex: 'salariu_net', key: 'salariu_net', align: 'right' as const, render: (salariu: number | undefined) => salariu ?? '-', sorter: (a: Artist, b: Artist) => (a.salariu_net ?? 0) - (b.salariu_net ?? 0) },
+        { title: 'Nume', dataIndex: 'nume', key: 'nume', sorter: (a: Artist, b: Artist) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' as const, width: 100 },
+        { title: 'Prenume', dataIndex: 'prenume', key: 'prenume', width: 100 },
+        { title: 'Salariu net (lei)', dataIndex: 'salariu_net', key: 'salariu_net', align: 'right' as const, render: (salariu: number | undefined) => salariu ?? '-', sorter: (a: Artist, b: Artist) => (a.salariu_net ?? 0) - (b.salariu_net ?? 0), width: 100 },
     ];
 
     const spectacoleColumns = [
-        { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu',  sorter: (a: Spectacol, b: Spectacol) => a.titlu.localeCompare(b.titlu), defaultSortOrder: 'ascend' as const},
-        { title: 'Data', dataIndex: 'data', key: 'data'  },
+        { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu',  sorter: (a: Spectacol, b: Spectacol) => a.titlu.localeCompare(b.titlu), defaultSortOrder: 'ascend' as const, width: 100},
+        { title: 'Data', dataIndex: 'data', key: 'data', width: 100  },
         {
-            title: 'Costuri colaboratori',
+            title: 'Costuri',
             dataIndex: 'colaboratori',
             render: (colaboratori: { id: string; plata: number }[]) => (
                 <ul style={{ paddingLeft: 0, listStyle: 'none', textAlign: 'left', display: 'inline-block', margin: 0 }}>
