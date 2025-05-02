@@ -274,7 +274,8 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
                     </div>
                 )}
             />
-			
+			<br />
+			<br />
 			<div style={{ textAlign: 'right' }}>
 				<Typography.Text strong>Total cheltuieli: {calculateTotalSalariiAngajati() + calculateTotalCosturiColaboratori()} lei</Typography.Text>
 			</div>
