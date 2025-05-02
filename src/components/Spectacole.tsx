@@ -1,9 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Modal, Table, Form, Input, Space, DatePicker, TimePicker, Select, message, InputNumber } from 'antd';
+import { Button, Modal, Table, Form, Input, Space, DatePicker, TimePicker, Select, message, InputNumber, Popconfirm, Tooltip, Typography, Spin } from 'antd'; 
 import type { TableProps } from 'antd';
 import { db } from '../Firebase';
-import { collection, addDoc, getDocs, where, query, updateDoc, doc, getDoc } from 'firebase/firestore';
-import moment from 'moment';
+import { collection, addDoc, getDocs, where, query, updateDoc, doc, getDoc, deleteDoc, limit } from 'firebase/firestore';
+import dayjs from 'dayjs';
+import { EditOutlined, DeleteOutlined, QuestionCircleOutlined, EyeOutlined, DollarOutlined, TeamOutlined } from '@ant-design/icons';
+
+
+interface Spectacol {
+  key: string;
+  titlu: string;
+  data: string;
+  ora: string;
+  durata: string;
+  actori: string[]; 
+  colaboratori?: { id: string; plata: number }[]; 
+}
 
 interface BiletType {
   key: string;
@@ -12,666 +24,888 @@ interface BiletType {
   nr_bilete: number;
   pret: number;
   bilete_vandute?: number;
+  bilete_ramase?: number;
 }
 
-const Spectacole: React.FC = () => {
-  interface Spectacol {
-    key: string;
-    titlu: string;
-    data: string;
-    ora: string;
-    durata: string;
-    actori: string[];
-  }
-  
+interface ActorOption {
+  value: string;
+  label: string;
+}
+
+
+interface SpectacoleProps {
+  userId: string; 
+  userRole: string;
+  userEmail?: string | null;
+}
+
+const Spectacole: React.FC<SpectacoleProps> = ({ userId, userRole, userEmail }) => {
+
   const [data, setData] = useState<Spectacol[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingSpectacol, setEditingSpectacol] = useState<Spectacol | null>(null);
   const [form] = Form.useForm();
-  const [actorData, setActorData] = useState<{ value: string; label: string }[]>([]);
-  const [colaboratorData, setColaboratorData] = useState<{ value: string; label: string }[]>([]);
+  const [actorData, setActorData] = useState<ActorOption[]>([]);
+  const [colaboratorData, setColaboratorData] = useState<ActorOption[]>([]);
   const [isDistributieModalVisible, setIsDistributieModalVisible] = useState(false);
   const [isBileteModalVisible, setIsBileteModalVisible] = useState(false);
   const [isIncasariModalVisible, setIsIncasariModalVisible] = useState(false);
   const [selectedActori, setSelectedActors] = useState<string[]>([]);
   const [selectedColaboratori, setSelectedColaborators] = useState<string[]>([]);
   const [bilete, setBilete] = useState<BiletType[]>([]);
-  const [selectedDataDates, setSelectedDataDates] = useState<any>(null);
-  const [ticketTableData, setTicketTableData] = useState<
-  { spectacol_id: string, categorie_bilet: string; total_bilete: number; bilete_vandute: number; bilete_ramase: number }[]
->([]);
-const [incasariData, setIncasariData] = useState<
-  { categorie_bilet: string, total_earnings: number, bilete_vandute: number}[]
->([]);
-const [totalEarnings, setTotalEarnings] = useState<number>(0);
-const [hasSelectedColaboratori, setHasSelectedColaboratori] = useState(false);
-const [colaboratorPayments, setColaboratorPayments] = useState<{ [key: string]: number }>({});
+  const [selectedDataDates, setSelectedDataDates] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [ticketTableData, setTicketTableData] = useState<{ spectacol_id: string, categorie_bilet: string; total_bilete: number; bilete_vandute: number; bilete_ramase: number }[]>([]);
+  const [incasariData, setIncasariData] = useState<{ categorie_bilet: string, total_earnings: number, bilete_vandute: number}[]>([]);
+  const [totalEarnings, setTotalEarnings] = useState<number>(0);
+  const [hasSelectedColaboratori, setHasSelectedColaboratori] = useState(false);
+  const [colaboratorPayments, setColaboratorPayments] = useState<{ [key: string]: number }>({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [artistId, setArtistId] = useState<string | null>(null); 
+  const [loadingArtistId, setLoadingArtistId] = useState(userRole === 'Artist'); 
+  const [artistNotFound, setArtistNotFound] = useState(false); 
 
 
-const fetchActorData = async () => {
-  try {
-    const querySnapshot = await getDocs(collection(db, 'actori'));
-    const fetchedData = querySnapshot.docs
-      .filter((doc) => doc.data().tip_contract === 'Angajat')
-      .map((doc) => ({
-        value: doc.id,
-        label: `${doc.data().nume} ${doc.data().prenume}`,
-      }));
-    setActorData(fetchedData);
-  } catch (error) {
-    console.error('Error fetching Angajat actors:', error);
-  }
-};
+ 
+  const canView = userRole === 'Administrator' || userRole === 'Casier' || userRole === 'Coordonator' || userRole === 'Artist';
+  const canAddEdit = userRole === 'Administrator' || userRole === 'Coordonator';
+  const canDelete = userRole === 'Administrator';
+  const canViewFinancials = userRole === 'Administrator' || userRole === 'Casier';
+  const canEditTickets = userRole === 'Administrator' || userRole === 'Casier';
 
-const fetchColaboratorData = async () => {
-  try {
-    const querySnapshot = await getDocs(collection(db, 'actori'));
-    const fetchedData = querySnapshot.docs
-      .filter((doc) => doc.data().tip_contract === 'Colaborator')
-      .map((doc) => ({
-        value: doc.id,
-        label: `${doc.data().nume} ${doc.data().prenume}`,
-      }));
 
-    setColaboratorData(fetchedData);
 
-  } catch (error) {
-    console.error('Error fetching Colaborator actors:', error);
-  }
-};
+  const fetchArtistIdByEmail = async () => {
+      console.log("fetchArtistIdByEmail called with email:", userEmail); 
+      if (userRole !== 'Artist' || !userEmail) {
+          setArtistId(null);
+          setLoadingArtistId(false);
+          return;
+      }
 
-  const transformDataForTable = (data: Spectacol[]) => {
-    return data; 
+      setArtistNotFound(false); 
+      try {
+          const artistiCollection = collection(db, 'artisti');
+
+          const q = query(artistiCollection, where("email", "==", userEmail), limit(1));
+          const querySnapshot = await getDocs(q);
+          console.log("Artist query snapshot empty:", querySnapshot.empty); 
+          if (!querySnapshot.empty) {
+              const foundId = querySnapshot.docs[0].id;
+              console.log("Found artist ID:", foundId);
+              setArtistId(foundId);
+          } else {
+              console.warn(`Nu s-a găsit niciun artist cu email-ul: ${userEmail}`);
+              setArtistId(null);
+              setArtistNotFound(true);
+          }
+      } catch (error) {
+          console.error("Eroare la preluarea ID-ului artistului:", error);
+          message.error("Eroare la identificarea artistului.");
+          setArtistId(null);
+          setArtistNotFound(true);
+      } finally {
+          setLoadingArtistId(false);
+      }
   };
 
-  const handleColaboratoriChange = (selectedColaboratori: string[]) => {
-    setHasSelectedColaboratori(selectedColaboratori.length > 0);
-  
+
+  const fetchActorData = async () => {
+    if (!userId || !canAddEdit) return;
+    try {
+      const userActoriCollection = collection(db, 'artisti');
+      const q = query(userActoriCollection, where('tip_contract', '==', 'Angajat'));
+      const querySnapshot = await getDocs(q);
+      const fetchedData = querySnapshot.docs.map((doc) => ({
+        value: doc.id,
+        label: `${doc.data().nume} ${doc.data().prenume}`,
+      }));
+      setActorData(fetchedData);
+    } catch (error) {
+      console.error('Error fetching Angajat actors:', error);
+      message.error('Eroare la preluarea actorilor angajați.');
+    }
+  };
+
+  const fetchColaboratorData = async () => {
+    if (!userId || !canAddEdit) return;
+    try {
+      const userActoriCollection = collection(db, 'artisti');
+      const q = query(userActoriCollection, where('tip_contract', '==', 'Colaborator'));
+      const querySnapshot = await getDocs(q);
+      const fetchedData = querySnapshot.docs.map((doc) => ({
+        value: doc.id,
+        label: `${doc.data().nume} ${doc.data().prenume}`,
+      }));
+      setColaboratorData(fetchedData);
+    } catch (error) {
+      console.error('Error fetching Colaborator actors:', error);
+      message.error('Eroare la preluarea actorilor colaboratori.');
+    }
+  };
+
+
+const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
+    if (!userId || !canView || (userRole === 'Artist' && (loadingArtistId || artistNotFound))) {
+        setData([]);
+        if (userRole === 'Artist' && artistNotFound && !loadingArtistId) {
+            message.warning("Nu s-au putut încărca spectacolele deoarece profilul artistului nu a fost găsit.");
+        }
+        setLoading(false);
+        return;
+    }
+
+    setLoading(true);
+    try {
+        const userSpectacoleCollection = collection(db, 'spectacole');
+        let q;
+
+        if (startDate && endDate) {
+            q = query(
+                userSpectacoleCollection,
+                where('data', '>=', startDate),
+                where('data', '<=', endDate)
+            );
+        } else {
+            q = query(userSpectacoleCollection);
+        }
+
+        const querySnapshot = await getDocs(q);
+        let fetchedData = querySnapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                key: doc.id,
+                titlu: data.titlu || '',
+                data: data.data || '',
+                ora: data.ora || '',
+                durata: data.durata || '',
+                actori: Array.isArray(data.actori)
+                    ? data.actori.filter((id: any): id is string => typeof id === 'string')
+                    : [],
+                colaboratori: Array.isArray(data.colaboratori)
+                    ? data.colaboratori.filter(
+                          (colab: any): colab is { id: string; plata: number } =>
+                              colab && typeof colab.id === 'string' && typeof colab.plata === 'number'
+                      )
+                    : [],
+            } as Spectacol;
+        });
+
+
+        if (userRole === 'Artist' && artistId) {
+            fetchedData = fetchedData.filter(spectacol => {
+                const isAngajat = Array.isArray(spectacol.actori) && spectacol.actori.includes(artistId);
+                const isColaborator = Array.isArray(spectacol.colaboratori) && spectacol.colaboratori.some((colab) => {
+                    return colab?.id === artistId;
+                });
+                return isAngajat || isColaborator;
+            });
+        }
+
+        setData(fetchedData);
+    } catch (error) {
+        console.error('Error fetching spectacole:', error);
+        if ((error as any).code === 'failed-precondition') {
+            message.error('Index Firestore necesar pentru filtrarea după dată. Verificați consola Firebase.');
+        } else {
+            message.error('Eroare la preluarea spectacolelor.');
+        }
+        setData([]);
+    } finally {
+        setLoading(false);
+    }
+};
+
+
+  const fetchBileteData = async () => {
+    if (!userId || !canView) {
+        setBilete([]);
+        return;
+    }
+    try {
+      const userBileteCollection = collection(db, 'bilete');
+      const querySnapshot = await getDocs(query(userBileteCollection));
+      const fetchedData = querySnapshot.docs.map((doc) => ({
+        key: doc.id,
+        ...(doc.data() as Omit<BiletType, 'key'>),
+      })) as BiletType[];
+      setBilete(fetchedData);
+    } catch (error) {
+      console.error('Error fetching bilete:', error);
+      message.error('Eroare la preluarea biletelor.');
+    }
+  };
+
+
+  useEffect(() => {
+      console.log("Main useEffect triggered. Role:", userRole, "Email:", userEmail); 
+      if (userId && canView) {
+          setLoadingArtistId(userRole === 'Artist'); 
+          setArtistNotFound(false); 
+          setArtistId(null); 
+
+          if (userRole === 'Artist') {
+              fetchArtistIdByEmail(); 
+          } else {
+              fetchSpectacolData(); 
+          }
+          fetchBileteData();
+          if (canAddEdit) {
+              fetchActorData();
+              fetchColaboratorData();
+          }
+      } else {
+
+          setData([]);
+          setBilete([]);
+          setActorData([]);
+          setColaboratorData([]);
+          setArtistId(null);
+          setLoadingArtistId(false);
+          setArtistNotFound(false);
+      }
+  }, [userId, userRole, userEmail]); 
+
+
+
+  useEffect(() => {
+
+      if (userRole === 'Artist') {
+          console.log("Artist-specific useEffect triggered. Loading Artist ID:", loadingArtistId); // Log trigger
+
+          if (!loadingArtistId) {
+              fetchSpectacolData();
+          }
+      }
+
+  }, [loadingArtistId, userRole]); 
+
+
+
+  useEffect(() => {
+    if (isModalVisible && editingSpectacol) {
+      const fields: any = {
+        titlu: editingSpectacol.titlu,
+        data: dayjs(editingSpectacol.data, 'DD-MM-YYYY'),
+        ora: dayjs(editingSpectacol.ora, 'HH:mm'),
+        durata: dayjs(editingSpectacol.durata, 'HH:mm'),
+        actori: editingSpectacol.actori,
+        colaboratori: editingSpectacol.colaboratori?.map(c => c.id) || [],
+      };
+      ;(editingSpectacol.colaboratori || []).forEach(colab => {
+        fields[`plata_colaborator_${colab.id}`] = colab.plata;
+      });
+      form.setFieldsValue(fields);
+    }
+  }, [isModalVisible, editingSpectacol, form]);
+
+  const handleColaboratoriChange = (selectedIds: string[]) => {
+    setHasSelectedColaboratori(selectedIds.length > 0);
     setColaboratorPayments((prev) => {
       const updatedPayments = { ...prev };
       Object.keys(updatedPayments).forEach((key) => {
-        if (!selectedColaboratori.includes(key)) {
+        if (!selectedIds.includes(key)) {
           delete updatedPayments[key];
+        }
+      });
+      selectedIds.forEach(id => {
+        if (!(id in updatedPayments)) {
+          updatedPayments[id] = 0;
         }
       });
       return updatedPayments;
     });
   };
 
-  const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
-    try {
-      let querySnapshot;
-      if (startDate && endDate) {
-        const q = query(
-          collection(db, 'spectacole'),
-          where('data', '>=', startDate),
-          where('data', '<=', endDate)
-        );
-        querySnapshot = await getDocs(q);
-      } else {
-        querySnapshot = await getDocs(collection(db, 'spectacole'));
-      }
-      const fetchedData = querySnapshot.docs.map((doc) => ({
-        key: doc.id,
-        titlu: doc.data().titlu,
-        data: doc.data().data,
-        ora: doc.data().ora,
-        durata: doc.data().durata,
-        actori: Array.isArray(doc.data().actori) ? doc.data().actori : [],
-      }));
-      setData(fetchedData);
-    } catch (error) {
-      console.error('Error fetching spectacole:', error);
+  const showModal = (spectacol: Spectacol | null = null) => {
+    if (!canAddEdit) return;
+
+    if (spectacol) {
+      form.resetFields();
+      setEditingSpectacol(spectacol);
+
+      const fields: any = {
+        titlu: spectacol.titlu,
+        data: dayjs(spectacol.data, 'DD-MM-YYYY'),
+        ora: dayjs(spectacol.ora, 'HH:mm'),
+        durata: dayjs(spectacol.durata, 'HH:mm'),
+        actori: spectacol.actori,
+        colaboratori: spectacol.colaboratori?.map(c => c.id) || [],
+      };
+      ;(spectacol.colaboratori || []).forEach(c => {
+        fields[`plata_colaborator_${c.id}`] = c.plata;
+      });
+
+      const colaboratorIds = (spectacol.colaboratori || []).map(c => c.id);
+      setHasSelectedColaboratori(colaboratorIds.length > 0);
+      setColaboratorPayments(
+        (spectacol.colaboratori || [])
+          .reduce((acc, c) => ({ ...acc, [c.id]: c.plata }), {})
+      );
+
+      form.setFieldsValue(fields);
     }
-  };
-  
-   const fetchBileteData = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, 'bilete'));
-      const fetchedData = querySnapshot.docs.map((doc) => ({
-        key: doc.id,
-        ...doc.data(),
-      })) as BiletType[];
-      setBilete(fetchedData);
-    } catch (error) {
-      console.error('Error fetching bilete:', error);
+    else {
+      form.resetFields();
+      setEditingSpectacol(null);
+      setHasSelectedColaboratori(false);
+      setColaboratorPayments({});
     }
-  };
 
-
-  useEffect(() => {
-    fetchSpectacolData();
-    fetchActorData();
-    fetchBileteData();
-    fetchColaboratorData();
-    const cells = document.querySelectorAll('.custom-cell');
-    cells.forEach(cell => {
-      cell.classList.remove('ant-table-column-sort', 'ant-table-column-has-sorters');
-    });
-  }, []);
-
-
-  const showModal = () => {
     setIsModalVisible(true);
   };
 
   const handleCancel = () => {
     form.resetFields();
-    setIsModalVisible(false);
+    setColaboratorPayments({});
     setHasSelectedColaboratori(false);
+    setIsModalVisible(false);
+    setEditingSpectacol(null);
   };
 
   const showDistributieModal = async (spectacolId: string) => {
+    if (!userId || !canView) return;
     try {
-      const spectacolDoc = await getDoc(doc(collection(db, 'spectacole'), spectacolId));
+      const spectacolDocRef = doc(db, 'spectacole', spectacolId);
+      const spectacolDoc = await getDoc(spectacolDocRef);
       if (!spectacolDoc.exists()) {
-        console.error("Spectacol not found.");
+        message.error("Spectacolul nu a fost găsit.");
         return;
       }
 
       const spectacolData = spectacolDoc.data();
       const actorIds = spectacolData.actori || [];
-      const colaboratorIds = spectacolData.colaboratori?.map((colab: { id: string }) => colab.id) || [];
+      const colaboratorInfo = spectacolData.colaboratori || [];
 
-      const actorPromises = actorIds.length > 0 
-        ? actorIds.map(async (actorId: string | undefined) => {
-            const actorDoc = await getDoc(doc(collection(db, 'actori'), actorId));
-            return actorDoc.exists() ? `${actorDoc.data().nume} ${actorDoc.data().prenume}` : null;
-          }) 
-        : [];
+      const fetchName = async (id: string) => {
+        if (!id) return null;
+        const actorDocRef = doc(db, 'artisti', id);
+        const actorDoc = await getDoc(actorDocRef);
+        return actorDoc.exists() ? `${actorDoc.data().nume} ${actorDoc.data().prenume}` : `ID Necunoscut: ${id}`;
+      };
 
-      const colaboratorPromises = colaboratorIds.length > 0 
-        ? colaboratorIds.map(async (colaboratorId: string | undefined) => {
-            const colaboratorDoc = await getDoc(doc(collection(db, 'actori'), colaboratorId)); 
-            return colaboratorDoc.exists() ? `${colaboratorDoc.data().nume} ${colaboratorDoc.data().prenume}` : null;
-          }) 
-        : [];
+      const actorPromises = actorIds.map(fetchName);
+      const colaboratorPromises = colaboratorInfo.map((colab: { id: string }) => fetchName(colab.id));
 
-      const actorNames = await Promise.all(actorPromises);
-      const colaboratorNames = await Promise.all(colaboratorPromises);
+      const actorNames = (await Promise.all(actorPromises)).filter((name): name is string => name !== null);
+      const colaboratorNames = (await Promise.all(colaboratorPromises)).filter((name): name is string => name !== null);
 
-      setSelectedActors(actorNames.filter(Boolean)); 
-      setSelectedColaborators(colaboratorNames.filter(Boolean)); 
+      setSelectedActors(actorNames);
+      setSelectedColaborators(colaboratorNames);
       setIsDistributieModalVisible(true);
 
     } catch (error) {
       console.error("Error fetching data for DistributieModal:", error);
+      message.error("Eroare la preluarea distribuției.");
     }
   };
-  
 
   const showBileteModal = (spectacolId: string) => {
-    const ticketsByCategory = bilete.reduce((acc, bilet) => {
-      if (bilet.spectacol_id === spectacolId) {
-        if (!acc[bilet.categorie_bilet]) {
-          acc[bilet.categorie_bilet] = 0;
-        }
-        acc[bilet.categorie_bilet] += bilet.nr_bilete;
+    if (!canView) return;
+    const ticketsForSpectacol = bilete.filter(b => b.spectacol_id === spectacolId);
+    const ticketsByCategory = ticketsForSpectacol.reduce((acc, bilet) => {
+      if (!acc[bilet.categorie_bilet]) {
+        acc[bilet.categorie_bilet] = { total: 0, vandute: 0 };
       }
+      acc[bilet.categorie_bilet].total += bilet.nr_bilete;
+      acc[bilet.categorie_bilet].vandute += (bilet.bilete_vandute ?? 0);
       return acc;
-    }, {} as { [key: string]: number });
-  
+    }, {} as { [key: string]: { total: number, vandute: number } });
+
     setTicketTableData(
-      Object.entries(ticketsByCategory).map(([categorie_bilet, total_bilete]) => ({
+      Object.entries(ticketsByCategory).map(([categorie_bilet, data]) => ({
         spectacol_id: spectacolId,
         categorie_bilet,
-        total_bilete,
-        bilete_vandute: bilete.find(b => b.spectacol_id === spectacolId && b.categorie_bilet === categorie_bilet)?.bilete_vandute ?? 0,
-        bilete_ramase: total_bilete - (bilete.find(b => b.spectacol_id === spectacolId && b.categorie_bilet === categorie_bilet)?.bilete_vandute ?? 0),
+        total_bilete: data.total,
+        bilete_vandute: data.vandute,
+        bilete_ramase: data.total - data.vandute,
       }))
     );
-  
     setIsBileteModalVisible(true);
   };
-  
+
   const showIncasariModal = (spectacolId: string) => {
+    if (!canViewFinancials) return;
     const selectedBilete = bilete.filter(bilet => bilet.spectacol_id === spectacolId);
     const earnings = selectedBilete.map((bilet) => ({
       categorie_bilet: bilet.categorie_bilet,
       total_earnings: (bilet.bilete_vandute ?? 0) * bilet.pret,
       bilete_vandute: bilet.bilete_vandute ?? 0,
     }));
-    
-    const totalEarnings = earnings.reduce((sum, current) => sum + current.total_earnings, 0);
-    
+
+    const total = earnings.reduce((sum, current) => sum + current.total_earnings, 0);
+
     setIncasariData(earnings);
+    setTotalEarnings(total);
     setIsIncasariModalVisible(true);
-    
-    setTotalEarnings(totalEarnings);
-  };
-  
-  
-  const handleDistributieCancel = () => {
-    setIsDistributieModalVisible(false);
-    
- };
-
-  const handleBileteCancel = () => {
-    setIsBileteModalVisible(false);
   };
 
-  
-  const handleIncasariCancel = () => {
-    setIsIncasariModalVisible(false);
-  };
+  const handleDistributieCancel = () => setIsDistributieModalVisible(false);
+  const handleBileteCancel = () => setIsBileteModalVisible(false);
+  const handleIncasariCancel = () => setIsIncasariModalVisible(false);
 
-  const handleSoldChange = (value: string, index: number) => {
+  const handleSoldChange = (value: string | number | null, index: number) => {
+    if (!canEditTickets || value === null) return;
     const updatedData = [...ticketTableData];
     const parsedValue = Number(value);
 
-    if (!isNaN(parsedValue)) {
-      updatedData[index].bilete_vandute = Math.max(
-        0,
-        Math.min(parsedValue, updatedData[index].total_bilete)
-      );
-      updatedData[index].bilete_ramase = updatedData[index].total_bilete - updatedData[index].bilete_vandute;
-      setTicketTableData(updatedData);
+    if (!isNaN(parsedValue) && parsedValue >= 0) {
+        const newValue = Math.min(parsedValue, updatedData[index].total_bilete);
+        updatedData[index].bilete_vandute = newValue;
+        updatedData[index].bilete_ramase = updatedData[index].total_bilete - newValue;
+        setTicketTableData(updatedData);
     }
   };
-  
+
   const handleSaveBilete = async () => {
+    if (!userId || !canEditTickets) return;
+    setSaving(true);
     try {
-      for (const updatedTicket of ticketTableData) {
-        const existingTicketIndex = bilete.findIndex(
+      const updates = ticketTableData.map(updatedTicket => {
+        const existingTicket = bilete.find(
           (bilet) => bilet.spectacol_id === updatedTicket.spectacol_id && bilet.categorie_bilet === updatedTicket.categorie_bilet
         );
-  
-        if (existingTicketIndex !== -1) {
-          const existingTicket = bilete[existingTicketIndex];
-          const remaining = existingTicket.nr_bilete - updatedTicket.bilete_vandute;
-  
-          if (remaining >= 0) {
-            await updateDoc(doc(collection(db, 'bilete'), existingTicket.key), {
-              bilete_vandute: updatedTicket.bilete_vandute,
-              bilete_ramase: updatedTicket.bilete_ramase,
-            });
-          } else {
-            message.error('Numărul de bilete vândute este invalid!');
-            return;
-          }
+        if (existingTicket) {
+          const ticketDocRef = doc(db, 'bilete', existingTicket.key);
+          return updateDoc(ticketDocRef, {
+            bilete_vandute: updatedTicket.bilete_vandute,
+            bilete_ramase: updatedTicket.bilete_ramase,
+          });
         }
-      }
-  
+        return Promise.resolve();
+      });
+
+      await Promise.all(updates);
+
       message.success('Bilete actualizate cu succes!');
       fetchBileteData(); 
       setIsBileteModalVisible(false);
     } catch (error) {
       console.error('Error updating bilete:', error);
+      message.error('Eroare la actualizarea biletelor.');
+    } finally {
+        setSaving(false);
     }
   };
-  
-  
-  
 
   const handleDataSearch = () => {
     if (selectedDataDates) {
       const [startDate, endDate] = selectedDataDates;
+   
       fetchSpectacolData(startDate.format('DD-MM-YYYY'), endDate.format('DD-MM-YYYY'));
+    } else {
+        message.info('Selectați un interval de date pentru căutare.');
     }
   };
-  
+
   const handleDataResetFilters = () => {
     setSelectedDataDates(null);
-    form.resetFields();
-    fetchSpectacolData();
+    fetchSpectacolData(); 
   };
-  
 
   const saveSpectacol = async () => {
+    if (!userId || !canAddEdit) {
+        message.error("Operație nepermisă.");
+        return;
+    }
+    setSaving(true);
     try {
       const values = await form.validateFields();
-  
+
       const formattedData = {
-        titlu: values.titlu || '',
-        data: values.data ? values.data.format('DD-MM-YYYY') : '',
-        ora: values.ora ? values.ora.format('HH:mm') : '',
-        durata: values.durata ? values.durata.format('HH:mm') : '',
-        actori: values.actori.map((actor: any) => actor),
-        colaboratori: (values.colaboratori || []).map((colaboratorId: string) => {
-          const plata = colaboratorPayments[colaboratorId] || 0;
-          return { id: colaboratorId, plata };
-        }),
+        titlu: values.titlu,
+        data: values.data.format('DD-MM-YYYY'),
+        ora: values.ora.format('HH:mm'),
+        durata: values.durata.format('HH:mm'),
+        actori: values.actori || [],
+        colaboratori: (values.colaboratori || []).map((colaboratorId: string) => ({
+          id: colaboratorId,
+          plata: colaboratorPayments[colaboratorId] || 0,
+        })),
       };
-  
-      await addDoc(collection(db, 'spectacole'), formattedData);
-      message.success('Spectacol adăugat cu succes!');
-      form.resetFields();
-      setColaboratorPayments({});
-      setIsModalVisible(false);
-      setHasSelectedColaboratori(false);
-      fetchSpectacolData();
+
+      if (editingSpectacol) {
+        const spectacolDocRef = doc(db, 'spectacole', editingSpectacol.key);
+        await updateDoc(spectacolDocRef, formattedData);
+        message.success('Spectacol actualizat cu succes!');
+      } else {
+        const userSpectacoleCollection = collection(db, 'spectacole');
+        await addDoc(userSpectacoleCollection, formattedData);
+        message.success('Spectacol adăugat cu succes!');
+      }
+
+      handleCancel();
+      fetchSpectacolData(); 
     } catch (error) {
-      console.error('Error saving spectacole:', error);
+      console.error('Error saving spectacol:', error);
+      message.error('Eroare la salvarea spectacolului.');
+    } finally {
+        setSaving(false);
     }
   };
-  
-  function calculateTotalEarnings(spectacole: Spectacol[]) {
-    let totalEarnings = 0;
 
-    spectacole.forEach(spectacol => {
-        const selectedBilete = bilete.filter(bilet => bilet.spectacol_id === spectacol.key);
-        const spectacolEarnings = selectedBilete.reduce((sum, bilet) => sum + ((bilet.bilete_vandute ?? 0) * bilet.pret), 0);
-        totalEarnings += spectacolEarnings;
+  const handleDelete = async (key: string) => {
+    if (!userId || !canDelete) {
+        message.error("Operație nepermisă.");
+        return;
+    }
+    setLoading(true);
+    try {
+        const spectacolDocRef = doc(db, 'spectacole', key);
+        await deleteDoc(spectacolDocRef);
+        message.success('Spectacol șters cu succes!');
+        fetchSpectacolData(); 
+    } catch (error) {
+        console.error('Error deleting spectacol:', error);
+        message.error('Eroare la ștergerea spectacolului.');
+        setLoading(false);
+    }
+  };
+
+  function calculateTotalEarnings(spectacoleData: Spectacol[], bileteData: BiletType[]) {
+    if (!canViewFinancials) return 0;
+    let total = 0;
+    spectacoleData.forEach(spectacol => {
+        const spectacolBilete = bileteData.filter(bilet => bilet.spectacol_id === spectacol.key);
+        const spectacolEarnings = spectacolBilete.reduce((sum, bilet) => sum + ((bilet.bilete_vandute ?? 0) * bilet.pret), 0);
+        total += spectacolEarnings;
     });
+    return total;
+  }
 
-    return totalEarnings;
-}
 
-  const columns: TableProps<any>['columns'] = [
-    { title: 'Titlu', dataIndex: 'titlu', key: 'titlu', align: 'center', className:'custom-cell', width: 200, sorter: (a, b) => a.titlu.localeCompare(b.titlu), sortOrder: 'ascend'},
-    { title: 'Data', dataIndex: 'data', key: 'data', align: 'center', width: 150 },
-    { title: 'Ora', dataIndex: 'ora', key: 'ora', align: 'center', width: 150 },
-    { title: 'Durata', dataIndex: 'durata', key: 'durata', align: 'center', width: 150 },
+  const columns: TableProps<Spectacol>['columns'] = [
+    { title: 'Titlu', dataIndex: 'titlu', key: 'titlu', width: 150, sorter: (a, b) => a.titlu.localeCompare(b.titlu), defaultSortOrder: 'ascend' },
+    { title: 'Data', dataIndex: 'data', key: 'data', width: 150 },
+    { title: 'Ora', dataIndex: 'ora', key: 'ora', width: 150 },
+    { title: 'Durata', dataIndex: 'durata', key: 'durata', width: 150 },
     {
       title: 'Detalii',
-      align: 'center',
-      width: 150,
-      render: (_text, record) => (
+      key: 'detalii',
+
+      width: 10,
+      render: (_, record) => (
         <Space direction="vertical" size={1}>
-          <Button type="link" onClick={() => {
-            showDistributieModal(record.key); 
-          }} className='tabbutton'>
+          <Button type="link" style={{ color: 'black' }} icon={<TeamOutlined />} onClick={() => showDistributieModal(record.key)} className='tabbutton'>
             Distribuție
           </Button>
-          <Button type="link" onClick={() => showBileteModal(record.key)} className='tabbutton'>
-          Bilete
-        </Button>
-        <Button type="link" onClick={() => showIncasariModal(record.key)} className='tabbutton'>
-          Încasări
-        </Button>
+          <Button type="link" style={{ color: 'black' }} icon={<EyeOutlined /> } onClick={() => showBileteModal(record.key)} className='tabbutton'>
+            Bilete
+          </Button>
+          {canViewFinancials && (
+            <Button type="link" style={{ color: 'black' }} icon={<DollarOutlined />} onClick={() => showIncasariModal(record.key)} className='tabbutton'>
+              Încasări
+            </Button>
+          )}
         </Space>
       ),
     },
-    
+    ...(canAddEdit || canDelete ? [{
+        title: 'Acțiuni',
+        key: 'action',
+        width: 100,
+        render: (_: any, record: Spectacol) => (
+            <Space size="middle">
+                {canAddEdit && (
+                    <Tooltip title="Editare">
+                        <Button type="link" style={{ color: 'black' }} icon={<EditOutlined />} onClick={() => showModal(record)} />
+                    </Tooltip>
+                )}
+                {canDelete && (
+                    <Popconfirm
+                        title="Sigur doriți să ștergeți acest spectacol?"
+                        onConfirm={() => handleDelete(record.key)}
+                        icon={<QuestionCircleOutlined style={{ color: 'red' }} />}
+                        okText="Da"
+                        cancelText="Nu"
+                    >
+                        <Tooltip title="Ștergere">
+                            <Button type="link" style={{ color: 'black' }}icon={<DeleteOutlined />} />
+                        </Tooltip>
+                    </Popconfirm>
+                )}
+            </Space>
+        ),
+    }] : []),
   ];
+
+
+  if (!canView) {
+      return <Typography.Text>Nu aveți permisiunea de a vizualiza această secțiune.</Typography.Text>;
+  }
+
+
+  if (loadingArtistId) { 
+      return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' }}><Spin size="large" tip="Identificare artist..." /></div>;
+  }
 
   return (
     <>
       <br />
-      <Button type="primary" shape="round" onClick={showModal}>
-        Adăugare spectacol
-      </Button>
+      {canAddEdit && (
+        <Button type="primary" shape="round" onClick={() => showModal()}>
+          Adăugare spectacol
+        </Button>
+      )}
       <br />
       <br />
-
       <Space direction="horizontal" size={15}>
-    <DatePicker.RangePicker
-      format="DD-MM-YYYY"
-      onChange={(dates) => setSelectedDataDates(dates)}
-      value={selectedDataDates}
-    />
-    <Button onClick={handleDataSearch}>
-      Căutare
-    </Button>
-
-    <Button onClick={handleDataResetFilters}>
-    Resetare
-    </Button>
-</Space>
-<br /><br />
+        <DatePicker.RangePicker
+          format="DD-MM-YYYY"
+          value={selectedDataDates}
+          onChange={(dates) => setSelectedDataDates(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
+        />
+        <Button onClick={handleDataSearch} disabled={!selectedDataDates}>
+          Căutare după dată
+        </Button>
+        <Button onClick={handleDataResetFilters}>
+          Resetare filtre
+        </Button>
+      </Space>
+      <br /><br />
       <Table
         columns={columns}
-        dataSource={transformDataForTable(data)}
+        dataSource={data}
         size="small"
-        pagination={{ hideOnSinglePage: true }}
+        pagination={{ pageSize: 10, hideOnSinglePage: true }}
         rowKey="key"
-        footer={() => (
+        loading={loading} 
+        scroll={{ x: 'max-content' }}
+        footer={canViewFinancials ? () => (
           <div style={{textAlign: 'right'}}>
-              Total încasări: {calculateTotalEarnings(data)} lei
-              <br />
+              Total încasări (perioada afișată): {calculateTotalEarnings(data, bilete)} lei
           </div>
-      )}
+        ) : undefined}
       />
+
       <Modal
-        title="Adăugare spectacol"
+        title={editingSpectacol ? "Editare spectacol" : "Adăugare spectacol"}
         open={isModalVisible}
         onCancel={handleCancel}
-        footer={null}
+        footer={[
+            <Button key="back" onClick={handleCancel}>
+              Anulare
+            </Button>,
+            <Button key="submit" type="primary" loading={saving} onClick={saveSpectacol}>
+              {editingSpectacol ? "Salvare modificări" : "Adăugare"}
+            </Button>,
+          ]}
+        destroyOnClose
       >
         <br />
-        <Form form={form} layout="vertical" autoComplete="off">
-          <Space direction="horizontal" size={15}>
-            <Form.Item
-              label="Titlu"
-              name="titlu"
-              rules={[{ required: true, message: 'Introduceți denumirea spectacolului!' }]}
-            >
-              <Input style={{ width: 350 }} />
-            </Form.Item>
-          </Space>
-          <Space direction="horizontal" size={15}>
+        <Form form={form} layout="vertical" autoComplete="off" >
+          <Form.Item
+            label="Titlu"
+            name="titlu"
+            rules={[{ required: true, message: 'Introduceți denumirea spectacolului!' }]}
+          >
+            <Input style={{ width: '100%' }} />
+          </Form.Item>
+          <Space direction="horizontal" size={15} style={{width: '100%'}} align="baseline">
             <Form.Item
               label="Data"
               name="data"
               rules={[{ required: true, message: 'Selectați data spectacolului!' }]}
+              style={{ flex: 1 }}
             >
               <DatePicker
                 format="DD-MM-YYYY"
                 placement="bottomRight"
-                disabledDate={(current) => current && current < moment().startOf('day')}
-                style={{ width: 160 }}
+                disabledDate={(current) => current && current < dayjs().startOf('day')}
+                style={{ width: '100%' }}
               />
             </Form.Item>
             <Form.Item
               label="Ora"
               name="ora"
               rules={[{ required: true, message: 'Selectați ora spectacolului!' }]}
+               style={{ flex: 1 }}
             >
               <TimePicker
                 format="HH:mm"
-                style={{ width: 160 }}
+                style={{ width: '100%' }}
                 placeholder="Selectați ora"
+                minuteStep={5}
+                showNow={false}
               />
             </Form.Item>
-          </Space>
-          <Space direction="horizontal" size={15}>
-            <Form.Item
+             <Form.Item
               label="Durata"
               name="durata"
               rules={[{ required: true, message: 'Selectați durata spectacolului!' }]}
+               style={{ flex: 1 }}
             >
               <TimePicker
                 format="HH:mm"
-                style={{ width: 160 }}
-                showNow={false} 
+                style={{ width: '100%' }}
+                showNow={false}
                 placeholder="Selectați durata"
+                minuteStep={5}
               />
             </Form.Item>
-            </Space>
-            <Form.Item
-              label="Actori"
-              name="actori"
-              rules={[{ required: true, message: 'Selectați actorii spectacolului!' }]}
-            >
-              <Select
-                mode="multiple"
-                options={actorData}
-                placeholder="Selectați actorii"
-                style={{ width: 450 }}
-                optionFilterProp="label"
-                filterSort={(optionA, optionB) =>
+          </Space>
+          <Form.Item
+            label="Actori"
+            name="actori"
+            rules={[{ required: true, message: 'Selectați actorii spectacolului!' }]}
+          >
+            <Select
+              mode="multiple"
+              options={actorData}
+              placeholder="Selectați actorii"
+              style={{ width: '100%' }}
+              optionFilterProp="label"
+              filterSort={(optionA, optionB) =>
                 (optionA?.label ?? '').toLowerCase().localeCompare((optionB?.label ?? '').toLowerCase())
-                }
-              />
-            </Form.Item>
-            <Form.Item
-  label="Colaboratori"
-  name="colaboratori"
-  rules={[{ required: false, message: 'Selectați colabora spectacolului!' }]}
->
-  <Select
-    mode="multiple"
-    options={colaboratorData}
-    placeholder="Selectați colaboratorii"
-    style={{ width: 450 }}
-    optionFilterProp="label"
-    filterSort={(optionA, optionB) =>
-      (optionA?.label ?? '').toLowerCase().localeCompare((optionB?.label ?? '').toLowerCase())
-    }
-    onChange={handleColaboratoriChange}
-  />
-</Form.Item>
+              }
+            />
+          </Form.Item>
+          <Form.Item
+            label="Colaboratori"
+            name="colaboratori"
+          >
+            <Select
+              mode="multiple"
+              options={colaboratorData}
+              placeholder="Selectați colaboratorii"
+              style={{ width: '100%' }}
+              optionFilterProp="label"
+              filterSort={(optionA, optionB) =>
+                (optionA?.label ?? '').toLowerCase().localeCompare((optionB?.label ?? '').toLowerCase())
+              }
+              onChange={handleColaboratoriChange}
+            />
+          </Form.Item>
 
-{hasSelectedColaboratori &&
-  form.getFieldValue('colaboratori')?.map((colaboratorId: string) => {
-    const colaboratorName = colaboratorData.find(
-      (colaborator) => colaborator.value === colaboratorId
-    )?.label;
-
-    return (
-      <Form.Item
-        key={colaboratorId}
-        label={`Sumă de plată pentru ${colaboratorName || colaboratorId}`}
-        name={`plata_colaborator_${colaboratorId}`}
-        rules={[{ required: true, message: 'Introduceți plata pentru colaborator!' }]}
-      >
-        <InputNumber
-          style={{ width: 150 }}
-          addonAfter="lei"
-          min="1"
-          maxLength={10}
-              parser={(value) => value?.replace(/\D/g, '') || ''} 
-              onKeyDown={(event) => {
-                if (!/^\d$/.test(event.key) && event.key !== 'Backspace' && event.key !== 'Delete' && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
-                  event.preventDefault(); 
-                }
-              }}
-              onPaste={(event) => {
-                const pasteData = event.clipboardData.getData('text');
-                if (!/^\d+$/.test(pasteData)) {
-                  event.preventDefault(); 
-                }
-              }}
-          onChange={(value) => {
-            setColaboratorPayments((prev) => ({ ...prev, [colaboratorId]: Number(value) || 0 }));
-          }}
-          
-        />
-      </Form.Item>
-    );
-  })}
-          
-          <br />
-          <Button type="primary" shape="round" onClick={saveSpectacol}>
-            Adăugare
-          </Button>
+          {hasSelectedColaboratori &&
+            form.getFieldValue('colaboratori')?.map((colaboratorId: string) => {
+              const colaboratorName = colaboratorData.find(c => c.value === colaboratorId)?.label;
+              return (
+                <Form.Item
+                  key={colaboratorId}
+                  label={`Sumă plată ${colaboratorName || `ID: ${colaboratorId}`}`}
+                  name={`plata_colaborator_${colaboratorId}`}
+                  rules={[{ required: true, message: 'Introduceți plata!' }]}
+                >
+                  <InputNumber
+                    style={{ width: 150 }}
+                    addonAfter="lei"
+                    min={0}
+                    parser={(value) => Number(value?.replace(/\D/g, '') || 0)}
+                    formatter={(value) => `${value}`.replace(/\D/g, '')}
+                    onChange={(value) => {
+                      setColaboratorPayments((prev) => ({ ...prev, [colaboratorId]: Number(value) || 0 }));
+                    }}
+                  />
+                </Form.Item>
+              );
+            })}
         </Form>
       </Modal>
 
       <Modal
-  title="Distribuție"
-  open={isDistributieModalVisible}
-  onCancel={handleDistributieCancel}
-  footer={null}
->
-  <br />
-  {selectedActori.length > 0 && (
-    <>
-      <div><b>Actori:</b></div>
-      <ul className="actor-list">
-        {selectedActori.map((actorName, index) => (
-          <li key={index}>{actorName}</li>
-        ))}
-      </ul>
-      <br />
-    </>
-  )}
-  {selectedColaboratori.length > 0 && (
-    <>
-      <div><b>Colaboratori:</b></div>
-      <ul className="colaborator-list">
-        {selectedColaboratori.map((colaboratorName, index) => (
-          <li key={index}>{colaboratorName}</li>
-        ))}
-      </ul>
-    </>
-  )}
-  {selectedActori.length === 0 && selectedColaboratori.length === 0 && (
-    <p>Nu sunt actori sau colaboratori disponibili</p>
-  )}
-</Modal>
+        title="Distribuție"
+        open={isDistributieModalVisible}
+        onCancel={handleDistributieCancel}
+        footer={null}
+      >
+        <br />
+        {selectedActori.length > 0 && (
+          <>
+            <div><b>Actori:</b></div>
+            <ul className="actor-list">
+              {selectedActori.map((actorName, index) => <li key={`actor-${index}`}>{actorName}</li>)}
+            </ul>
+            <br />
+          </>
+        )}
+        {selectedColaboratori.length > 0 && (
+          <>
+            <div><b>Colaboratori:</b></div>
+            <ul className="colaborator-list">
+              {selectedColaboratori.map((colaboratorName, index) => <li key={`colab-${index}`}>{colaboratorName}</li>)}
+            </ul>
+          </>
+        )}
+        {selectedActori.length === 0 && selectedColaboratori.length === 0 && (
+          <p>Nu sunt actori sau colaboratori selectați.</p>
+        )}
+      </Modal>
 
-<Modal
-  title="Detalii bilete"
-  open={isBileteModalVisible}
-  onCancel={handleBileteCancel}
-  footer={null}
->
-  {ticketTableData && ticketTableData.length > 0 ? (
-    <>
-      <Table
-        dataSource={ticketTableData}
-        columns={[
-          {
-            title: 'Categorie',
-            dataIndex: 'categorie_bilet',
-            key: 'categorie_bilet',
-          },
-          {
-            title: 'Total bilete',
-            dataIndex: 'total_bilete',
-            key: 'total_bilete',
-          },
-          {
-            title: 'Bilete vândute',
-            dataIndex: 'bilete_vandute',
-            key: 'bilete_vandute',
-            render: (_text, record, index) => (
-              <Input
-                type="number"
-                min={0}
-                max={record.total_bilete}
-                value={record.bilete_vandute}
-                onChange={(e) => handleSoldChange(e.target.value, index)}
-              />
-            ),
-          },
-          {
-            title: 'Bilete rămase',
-            dataIndex: 'bilete_ramase',
-            key: 'bilete_ramase',
-          },
-        ]}
-        pagination={false}
-        rowKey="categorie_bilet"
-      />
-      <br />
-      <Button key="save" type="primary" shape='round' onClick={handleSaveBilete}>
-        Salvare
-      </Button>
-    </>
-  ) : (
-    <p>Nu sunt bilete disponibile.</p>
-  )}
-</Modal>
-<Modal
-  title="Încasări"
-  open={isIncasariModalVisible}
-  onCancel={handleIncasariCancel}
-  footer={null}
->
-{incasariData && incasariData.length > 0 ? (
-    <>
-  <br />
-  <Table
-    dataSource={incasariData}
-    columns={[
-      { title: 'Categorie bilete', dataIndex: 'categorie_bilet', key: 'categorie_bilet' },
-      { title: 'Bilete vândute', dataIndex: 'bilete_vandute', key: 'bilete_vandute' },
-      { title: 'Încasări (lei)', dataIndex: 'total_earnings', key: 'total_earnings' },
-    ]}
-    rowKey="categorie_bilet"
-    pagination={false}
-    footer={() => <div style={{textAlign: 'right'}}>Total: {totalEarnings} lei</div>}
-  />
-  <br />
-  
-  </>
-) : (
-  <p>Nu sunt încasări disponibile.</p>
-)}
-</Modal>
+      <Modal
+        title="Detalii bilete"
+        open={isBileteModalVisible}
+        onCancel={handleBileteCancel}
+        footer={null}
+        destroyOnClose
+      >
+        {ticketTableData.length > 0 ? (
+          <>
+            <Table
+              dataSource={ticketTableData}
+              columns={[
+                { title: 'Categorie', dataIndex: 'categorie_bilet', key: 'categorie_bilet' },
+                { title: 'Total bilete', dataIndex: 'total_bilete', key: 'total_bilete' },
+                {
+                  title: 'Bilete vândute',
+                  dataIndex: 'bilete_vandute',
+                  key: 'bilete_vandute',
+                  render: (text, record, index) => (
+                    <InputNumber
+                      min={0}
+                      max={record.total_bilete}
+                      value={text}
+                      onChange={(value) => handleSoldChange(value, index)}
+                      style={{ width: 80 }}
+                      disabled={!canEditTickets}
+                    />
+                  ),
+                },
+                { title: 'Bilete rămase', dataIndex: 'bilete_ramase', key: 'bilete_ramase' },
+              ]}
+              pagination={false}
+              rowKey="categorie_bilet"
+              size="small"
+            />
+            <br />
+            {canEditTickets && (
+                <Button key="save" type="primary" shape='round' loading={saving} onClick={handleSaveBilete}>
+                  Salvare modificări bilete
+                </Button>
+            )}
+          </>
+        ) : (
+          <p>Nu sunt bilete definite pentru acest spectacol.</p>
+        )}
+      </Modal>
 
-
+      <Modal
+        title="Încasări"
+        open={isIncasariModalVisible}
+        onCancel={handleIncasariCancel}
+        footer={null}
+      >
+        {incasariData.length > 0 ? (
+          <>
+            <br />
+            <Table
+              dataSource={incasariData}
+              columns={[
+                { title: 'Categorie bilete', dataIndex: 'categorie_bilet', key: 'categorie_bilet' },
+                { title: 'Bilete vândute', dataIndex: 'bilete_vandute', key: 'bilete_vandute' },
+                { title: 'Încasări (lei)', dataIndex: 'total_earnings', key: 'total_earnings' },
+              ]}
+              rowKey="categorie_bilet"
+              pagination={false}
+              size="small"
+              footer={() => <div style={{textAlign: 'right'}}><b>Total: {totalEarnings} lei</b></div>}
+            />
+            <br />
+          </>
+        ) : (
+          <p>Nu există încasări pentru acest spectacol.</p>
+        )}
+      </Modal>
     </>
   );
 };
