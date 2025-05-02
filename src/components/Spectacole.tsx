@@ -898,7 +898,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
               rowKey="categorie_bilet"
               pagination={false}
               size="small"
-              footer={() => <div style={{textAlign: 'right'}}><b>Total: {totalEarnings} lei</b></div>}
+              footer={() => <div style={{textAlign: 'right'}}><Typography.Text strong>Total: {totalEarnings} lei</Typography.Text></div>}
             />
             <br />
           </>
