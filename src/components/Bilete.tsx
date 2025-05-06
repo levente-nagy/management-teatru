@@ -3,7 +3,8 @@ import { Button, Modal, Table, Form, Space, InputNumber, Select, message, Popcon
 import type { TableProps } from 'antd';
 import { db } from '../Firebase';
 import { collection, addDoc, getDocs, query, doc, updateDoc, deleteDoc, where } from 'firebase/firestore'; 
-import { EditOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons'; 
+import { EditOutlined, DeleteOutlined, QuestionCircleOutlined, DownloadOutlined } from '@ant-design/icons'; 
+import * as XLSX from 'xlsx';
 
 const { Option } = Select;
 
@@ -182,7 +183,8 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
         const q = query(
           userBileteCollection,
           where('spectacol_id', '==', values.spectacol),
-          where('categorie_bilet', '==', values.categorie_bilet)
+          where('categorie_bilet', '==', values.categorie_bilet),
+          where('pret', '==', Number(values.pret)) 
         );
         const querySnap = await getDocs(q);
   
@@ -191,9 +193,9 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
           const existing = querySnap.docs[0].data() as BiletType;
           await updateDoc(docRef, {
             nr_bilete: existing.nr_bilete + nrBileteNum,
-            bilete_ramase: existing.bilete_ramase + nrBileteNum
+            bilete_ramase: (existing.bilete_ramase ?? 0) + nrBileteNum
           });
-          message.success('Categorie bilete actualizată cu noile bilete!');
+          message.success('Numărul de bilete actualizat pentru categoria și prețul existent!');
         } else {
           biletData.bilete_vandute = 0;
           biletData.bilete_ramase = nrBileteNum;
@@ -235,6 +237,49 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
       console.error('Error deleting bilet:', error);
       message.error('Eroare la ștergerea categoriei de bilete.');
       setLoading(false);
+    }
+  };
+
+  
+  const handleExportExcel = () => {
+    if (!bilete.length) {
+      message.info('Nu există date de exportat.');
+      return;
+    }
+
+    const sortedData = [...bilete].sort((a, b) => {
+      const titleComparison = a.spectacolTitlu.localeCompare(b.spectacolTitlu);
+      if (titleComparison !== 0) return titleComparison;
+      const spectacolA = spectacole.find(s => s.key === a.spectacol_id);
+      const spectacolB = spectacole.find(s => s.key === b.spectacol_id);
+      const dateComparison = (spectacolA?.data || '').localeCompare(spectacolB?.data || '');
+      if (dateComparison !== 0) return dateComparison;
+      return (spectacolA?.ora || '').localeCompare(spectacolB?.ora || '');
+    });
+
+    const dataToExport = sortedData.map(bilet => {
+      const spectacol = spectacole.find(s => s.key === bilet.spectacol_id);
+      return {
+        'Spectacol': bilet.spectacolTitlu,
+        'Data': spectacol?.data || '-',
+        'Ora': spectacol?.ora || '-',
+        'Tip bilet': bilet.categorie_bilet,
+        'Total bilete': bilet.nr_bilete,
+        'Bilete vândute': bilet.bilete_vandute,
+        'Bilete rămase': bilet.bilete_ramase,
+        'Preț (lei)': bilet.pret,
+      };
+    });
+
+    try {
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Bilete');
+      XLSX.writeFile(workbook, 'Bilete.xlsx');
+      message.success('Datele au fost exportate cu succes în Bilete.xlsx!');
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      message.error("Eroare la exportul datelor în Excel.");
     }
   };
 
@@ -301,6 +346,18 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
           Adăugare categorie bilete
         </Button>
       )}
+      <br/>
+      <br/>
+      {canView && (
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleExportExcel}
+              disabled={bilete.length === 0}
+              shape="round"
+            >
+              Exportă în Excel
+            </Button>
+        )}
       <br />
       <br />
       <Table<BiletType & { spectacolTitlu: string }>

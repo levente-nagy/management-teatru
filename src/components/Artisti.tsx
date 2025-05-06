@@ -4,7 +4,8 @@ import type { TableProps } from 'antd';
 import { db } from '../Firebase';
 import { collection, addDoc, getDocs, where, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import dayjs from 'dayjs';
-import { EditOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, QuestionCircleOutlined, DownloadOutlined } from '@ant-design/icons';
+import * as XLSX from 'xlsx';
 
 interface ActorType {
   key: string;
@@ -234,6 +235,46 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
     fetchActorData();
   };
 
+  const handleExportExcel = () => {
+    if (!data.length) {
+      message.info('Nu există date de exportat.');
+      return;
+    }
+    const sortedData = [...data].sort((a, b) => a.nume.localeCompare(b.nume));
+
+    const dataToExport = sortedData.map(actor => {
+      const row: any = {
+        'Nume': actor.nume,
+        'Prenume': actor.prenume,
+        'Email': actor.email || '-',
+        'Profesia': actor.profesie,
+        'Funcția': actor.functie,
+      };
+      if (canViewSensitiveData) {
+        row['CNP'] = actor.CNP || '-';
+        row['Carte identitate'] = actor.carte_identitate || '-';
+        row['Tip contract'] = actor.tip_contract || '-';
+        row['Salariu brut (lei)'] = actor.salariu_brut !== undefined ? actor.salariu_brut : '-';
+        row['Impozite (lei)'] = actor.impozite !== undefined ? actor.impozite : '-';
+        row['Salariu net (lei)'] = actor.salariu_net !== undefined ? actor.salariu_net : '-';
+        row['Data început'] = actor.data_inceput_contract || '-';
+        row['Perioadă (luni)'] = actor.perioada_contract !== undefined ? actor.perioada_contract : '-';
+      }
+      return row;
+    });
+
+    try {
+        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Artisti');
+        XLSX.writeFile(workbook, 'Artisti.xlsx');
+        message.success('Datele au fost exportate cu succes în Artisti.xlsx!');
+    } catch (error) {
+        console.error("Error exporting to Excel:", error);
+        message.error("Eroare la exportul datelor în Excel.");
+    }
+  };
+
   const onValuesChange = (changedValues: any) => {
     if ('tip_contract' in changedValues) {
       setContractType(changedValues.tip_contract);
@@ -290,14 +331,15 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
 
   return (
     <>
-      <br />
-      {canAddEditDelete && (
-        <Button type="primary" shape="round" onClick={() => showModal()}>
-          Adăugare artist
-        </Button>
-      )}
-      <br />
-      <br />
+      
+
+        {canAddEditDelete && (
+          <Button type="primary" shape="round" onClick={() => showModal()}>
+            Adăugare artist
+          </Button>
+        )}
+
+      <br/><br />
       {canViewSensitiveData && (
         <Space direction="horizontal" size={15} style={{ marginBottom: 16 }}>
           <DatePicker.RangePicker
@@ -312,7 +354,16 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
             Resetare filtre
           </Button>
         </Space>
+        
       )}
+         {canAddEditDelete && (
+          <Space direction="horizontal" size={15} style={{ marginLeft: 16 }}>
+          <Button  shape="round" onClick={handleExportExcel} icon={<DownloadOutlined />} >
+            Exportă în Excel
+          </Button>
+          </Space>
+      )}
+      <br/><br/> 
       <Table<ActorType>
         columns={columns}
         dataSource={data}

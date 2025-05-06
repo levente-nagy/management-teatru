@@ -136,6 +136,67 @@ const Home: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let inactivityTimer: NodeJS.Timeout | undefined;
+    const INACTIVITY_TIMEOUT_DURATION_MS = 10 * 60 * 1000; 
+
+    const performSignOut = async (reasonMessage: string) => {
+      const auth = getAuth();
+      if (auth.currentUser) {
+        try {
+          await signOut(auth);
+          message.info(`Ați fost deconectat automat. ${reasonMessage}`);
+          setCurrentUser(null);
+          setIsAuthenticated(false);
+          setUserProfile(null);
+          setMenuItems([]);
+          setSelectedItem(null);
+        } catch (error) {
+          console.error("Eroare la deconectarea automată:", error);
+          message.error("Eroare la deconectarea automată.");
+        }
+      }
+    };
+
+    const resetInactivityTimer = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        performSignOut("Motiv: inactivitate.");
+      }, INACTIVITY_TIMEOUT_DURATION_MS);
+    };
+
+    const handleUserActivity = () => {
+      if (isAuthenticated && currentUser) { 
+        resetInactivityTimer();
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      const auth = getAuth();
+      if (auth.currentUser) {
+        signOut(auth).catch(err => console.warn("Eroare la deconectare în beforeunload (best-effort):", err));
+      }
+    };
+
+    const activityEventTypes: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+
+    if (isAuthenticated && currentUser) {
+      resetInactivityTimer();
+      activityEventTypes.forEach(eventType => window.addEventListener(eventType, handleUserActivity));
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    } else {
+      clearTimeout(inactivityTimer);
+      activityEventTypes.forEach(eventType => window.removeEventListener(eventType, handleUserActivity));
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      activityEventTypes.forEach(eventType => window.removeEventListener(eventType, handleUserActivity));
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isAuthenticated, currentUser]); 
+
+  useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
     };
