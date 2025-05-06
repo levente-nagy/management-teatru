@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { ConfigProvider, Layout, Card, Menu, message, Spin, Typography, Divider } from "antd";
+import { ConfigProvider, Layout, Card, Menu, message, Spin, Typography, Divider, Space } from "antd";
 const { Content, Footer, Sider } = Layout;
-import { CalendarOutlined, ContainerOutlined, EuroCircleOutlined, LogoutOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { CalendarOutlined, ContainerOutlined, EuroCircleOutlined, GithubOutlined, LogoutOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import locale from "antd/locale/ro_RO";
 import dayjs from "dayjs";
 import "dayjs/locale/ro";
@@ -55,7 +55,9 @@ const getViewerMenuItems = () => [
 const Home: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<string | null>(() => {
+    return localStorage.getItem("selectedMenuItem");
+  });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -69,9 +71,7 @@ const Home: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setIsLoadingAuth(true);
       setIsLoadingProfile(true);
-      setUserProfile(null);
-      setMenuItems([]);
-      setSelectedItem(null);
+
 
       if (user) {
         setCurrentUser(user);
@@ -105,19 +105,30 @@ const Home: React.FC = () => {
             }
             setMenuItems(currentMenuItems);
 
-            if (currentMenuItems.length > 0) {
+            const storedSelectedItem = localStorage.getItem("selectedMenuItem");
+            if (storedSelectedItem && currentMenuItems.some(item => item.key === storedSelectedItem)) {
+                setSelectedItem(storedSelectedItem);
+            } else if (currentMenuItems.length > 0) {
                 setSelectedItem(currentMenuItems[0].key);
+                localStorage.setItem("selectedMenuItem", currentMenuItems[0].key);
+            } else {
+                setSelectedItem(null);
+                localStorage.removeItem("selectedMenuItem");
             }
 
           } else {
             console.error("Documentul utilizatorului nu a fost găsit în Firestore!");
             message.error("Profilul utilizatorului nu a putut fi încărcat. Contactați administratorul.");
-            handleLogout();
+            localStorage.removeItem("selectedMenuItem");
+            handleLogout(); 
           }
         } catch (error) {
           console.error("Eroare la preluarea profilului din Firestore:", error);
           message.error("Eroare la încărcarea profilului.");
-          setUserProfile(null);
+          setUserProfile(null); 
+          setMenuItems([]); 
+          setSelectedItem(null); 
+          localStorage.removeItem("selectedMenuItem"); 
         } finally {
            setIsLoadingProfile(false);
         }
@@ -127,6 +138,7 @@ const Home: React.FC = () => {
         setUserProfile(null);
         setMenuItems([]);
         setSelectedItem(null);
+        localStorage.removeItem("selectedMenuItem");
         setIsLoadingProfile(false);
       }
       setIsLoadingAuth(false);
@@ -150,6 +162,7 @@ const Home: React.FC = () => {
           setUserProfile(null);
           setMenuItems([]);
           setSelectedItem(null);
+          localStorage.removeItem("selectedMenuItem");
         } catch (error) {
           console.error("Eroare la deconectarea automată:", error);
           message.error("Eroare la deconectarea automată.");
@@ -170,29 +183,20 @@ const Home: React.FC = () => {
       }
     };
 
-    const handleBeforeUnload = () => {
-      const auth = getAuth();
-      if (auth.currentUser) {
-        signOut(auth).catch(err => console.warn("Eroare la deconectare în beforeunload (best-effort):", err));
-      }
-    };
 
     const activityEventTypes: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
 
     if (isAuthenticated && currentUser) {
       resetInactivityTimer();
       activityEventTypes.forEach(eventType => window.addEventListener(eventType, handleUserActivity));
-      window.addEventListener('beforeunload', handleBeforeUnload);
     } else {
       clearTimeout(inactivityTimer);
       activityEventTypes.forEach(eventType => window.removeEventListener(eventType, handleUserActivity));
-      window.removeEventListener('beforeunload', handleBeforeUnload);
     }
 
     return () => {
       clearTimeout(inactivityTimer);
       activityEventTypes.forEach(eventType => window.removeEventListener(eventType, handleUserActivity));
-      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [isAuthenticated, currentUser]); 
 
@@ -212,12 +216,20 @@ const Home: React.FC = () => {
       handleLogout();
     } else {
       setSelectedItem(key);
+      localStorage.setItem("selectedMenuItem", key);
     }
   };
 
   const handleLogout = () => {
     const auth = getAuth();
-    signOut(auth).catch((error) => {
+    signOut(auth).then(() => {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setUserProfile(null);
+        setMenuItems([]);
+        setSelectedItem(null);
+        localStorage.removeItem("selectedMenuItem");
+    }).catch((error) => {
       console.error("Eroare la deconectare:", error);
       message.error("Eroare la deconectare.");
     });
@@ -270,8 +282,8 @@ const Home: React.FC = () => {
 
   if (isLoadingAuth || (isAuthenticated && isLoadingProfile)) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Spin size="large" />
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100vw', backgroundColor: '#f0f2f5' }}>
+       <Spin size="large" />
       </div>
     );
   }
@@ -303,15 +315,24 @@ const Home: React.FC = () => {
           collapsible
           collapsed={collapsed}
           onCollapse={(value) => setCollapsed(value)}
-          style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100vh',
+            overflowY: 'hidden', 
+            position: 'sticky',  
+            top: 0,              
+            zIndex: 1            
+          }}
         >
 
-          <div style={{ flex: '1 1 auto', overflow: 'hidden auto' }}>
+          <div style={{ flex: '1 1 auto', overflowY: 'auto', 
+            minHeight: 0 }}>
             {!collapsed && userProfile && (
               <div style={{ marginBottom:'10px', padding: '5px', textAlign: 'center' }}>
                 <br/>
                 <img className="banner" style={{ width: '60%', borderRadius: '100px',  border: '2px solid white' }} alt="Banner" src="/banner.jpg"/>
-                <Typography.Title level={5} style={{ color: 'white', marginBottom: '2px' }}>
+                <Typography.Title level={5} style={{ color: 'white', marginBottom: '2px', marginTop: '10px' }}>
                   {userProfile.prenume} {userProfile.nume}
                 </Typography.Title>
                 <Typography.Text style={{ color: 'rgba(255, 255, 255, 0.65)' }}>
@@ -334,7 +355,7 @@ const Home: React.FC = () => {
             />
           </div>
 
-
+          <div style={{ flexShrink: 0 }}>
           <Divider style={{ backgroundColor: 'rgba(55, 50, 50, 0.65)', margin: '5px 0 0 0' }} />
           <div >
             <Menu
@@ -345,23 +366,31 @@ const Home: React.FC = () => {
               items={[ { label: "Deconectare", key: "logout", icon: <LogoutOutlined /> } ]}
             />
           </div>
+          </div>
         </Sider>
 
 
-        <Layout>
+        <Layout style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
           <Content
              style={{
-               
+               flex: '1 1 auto', 
                padding: 24,
-               minHeight: 280,
+               minHeight: 280, 
                background: '#fff',
-               overflow: 'auto'
+               overflow: 'auto' 
              }}
           >
             {renderLayoutContent()}
           </Content>
-          <Footer style={{ textAlign: "center" }}>
+          <Footer style={{ textAlign: "center", flexShrink: 0 }}> 
+            <Space direction="horizontal" size="middle" >
             Levente NAGY © {new Date().getFullYear()}
+            <button onClick={() => window.open("https://github.com/levente-nagy/management-teatru", "_blank")} style={{ background: '#f5f5f5', color:"black", border: 'none', cursor: 'pointer' }}>
+            <GithubOutlined/>
+            </button>
+             
+            </Space>
+            
           </Footer>
         </Layout>
       </Layout>

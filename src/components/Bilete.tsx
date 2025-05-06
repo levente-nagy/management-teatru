@@ -340,7 +340,7 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
 
   return (
     <>
-      <br />
+      
       {canAddEdit && ( 
         <Button type="primary" shape="round" onClick={() => showModal()}>
           Adăugare categorie bilete
@@ -355,7 +355,7 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
               disabled={bilete.length === 0}
               shape="round"
             >
-              Exportă în Excel
+              Export
             </Button>
         )}
       <br />

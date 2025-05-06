@@ -699,7 +699,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
               disabled={data.length === 0}
               shape="round"
             >
-              Exportă în Excel
+              Export
             </Button>
             </Space>
         )}

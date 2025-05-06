@@ -359,7 +359,7 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
          {canAddEditDelete && (
           <Space direction="horizontal" size={15} style={{ marginLeft: 16 }}>
           <Button  shape="round" onClick={handleExportExcel} icon={<DownloadOutlined />} >
-            Exportă în Excel
+            Export
           </Button>
           </Space>
       )}
