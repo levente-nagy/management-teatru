@@ -383,11 +383,12 @@ const Home: React.FC = () => {
             {renderLayoutContent()}
           </Content>
           <Footer style={{ textAlign: "center", flexShrink: 0 }}> 
-            <Space direction="horizontal" size="middle" >
-            Levente NAGY © {new Date().getFullYear()}
-            <button onClick={() => window.open("https://github.com/levente-nagy/management-teatru", "_blank")} style={{ background: '#f5f5f5', color:"black", border: 'none', cursor: 'pointer' }}>
+            <Space direction="horizontal" size={1}>
+            <button onClick={() => window.open("https://github.com/levente-nagy/management-teatru", "_blank")} style={{ background: '#f5f5f5', color:"black", border: 'none', cursor: 'pointer', height: '35px', width: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <GithubOutlined/>
             </button>
+            Levente NAGY © {new Date().getFullYear()}
+            
              
             </Space>
             
