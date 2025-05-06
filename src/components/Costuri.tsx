@@ -172,9 +172,14 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
         return totalCost;
       };
 
-  const calculateTotalCosturiPerShow = (colaboratori: any[]) => {
-    return colaboratori.reduce((total, colaborator) => total + colaborator.plata, 0);
-  };
+      const calculateTotalSalariiAngajati = () => {
+        return angajati.reduce((total, angajat) => total + (angajat.salariu_brut ?? 0), 0);
+      };
+
+      const calculateTotalCosturiPerShow = (colaboratori: { id: string; plata: number }[]) => {
+        if (!colaboratori) return 0;
+        return colaboratori.reduce((total, colaborator) => total + (colaborator.plata || 0), 0);
+      };
 
       const handleDataSearch = () => {
         if (selectedDataDates) {
@@ -185,37 +190,29 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
         }
       };
 
-  const handleDataResetFilters = () => {
-    setSelectedDataDates(null);
-    fetchSpectacoleData();
-    fetchColaboratorPayments();
-    fetchColaboratorNames();
-  };
+      const handleDataResetFilters = () => {
+        setSelectedDataDates(null);
+        fetchSpectacoleData();
+      };
 
-  return (
-    <div>
-      <br />
-      <Space direction="horizontal" size={15}>
-        <DatePicker.RangePicker
-          format="DD-MM-YYYY"
-          onChange={(dates) => setSelectedDataDates(dates)}
-          value={selectedDataDates}
-        />
-        <Button onClick={handleDataSearch}>
-          Căutare
-        </Button>
 
-        <Button onClick={handleDataResetFilters}>
-          Resetare
-        </Button>
-      </Space>
-      <br /><br />
-      <Table
-        dataSource={spectacole}
-        columns={[
-          { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu', align: 'center', },
-          { title: 'Data', dataIndex: 'data', key: 'data', align: 'center', },
-          {
+    if (!canView) {
+        return <Typography.Text>Nu aveți permisiunea de a vizualiza această secțiune.</Typography.Text>;
+    }
+
+    const angajatiColumns = [
+        { title: 'Nume', dataIndex: 'nume', key: 'nume',  sorter: (a: Artist, b: Artist) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' as const, width: 50 },
+        { title: 'Prenume', dataIndex: 'prenume', key: 'prenume', width: 50 },
+        { title: 'Salariu net (lei)', dataIndex: 'salariu_net', key: 'salariu_net', align: 'right' as const, render: (salariu: number | undefined) => salariu ?? '-', width: 20 },
+        { title: 'Impozite (lei)', dataIndex: 'impozite', key: 'impozite', align: 'right' as const, render: (impozit: number | undefined) => impozit ?? '-', width: 20 },
+        { title: 'Salariu brut (lei)', dataIndex: 'salariu_brut', key: 'salariu_brut', align: 'right' as const, render: (salariu: number | undefined) => salariu ?? '-', width: 20},
+
+    ];
+
+    const spectacoleColumns = [
+        { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu',  sorter: (a: Spectacol, b: Spectacol) => a.titlu.localeCompare(b.titlu), defaultSortOrder: 'ascend' as const, width: 150},
+        { title: 'Data', dataIndex: 'data', key: 'data', width: 150  },
+        {
             title: 'Costuri',
             dataIndex: 'colaboratori',
             render: (colaboratori: { id: string; plata: number }[]) => (
@@ -223,25 +220,70 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
                     {renderColaboratorPayments(colaboratori)}
                 </ul>
             ),
-          },
-          {
-            title: 'Total',
+        },
+        {
+            title: 'Costuri per spectacol (lei)',
             dataIndex: 'colaboratori',
             key: 'totalCosturi',
-            align: 'center',
-            render: (colaboratori) => `${calculateTotalCosturiPerShow(colaboratori)} lei`,
-          },
-        ]}
-        pagination={false}
-        rowKey="id"
-        footer={() => (
-          <div style={{ textAlign: 'right' }}>
-            Total costuri: {calculateTotalCosturi()} lei
-          </div>
-        )}
-      />
-    </div>
-  );
+            align: 'right' as const,
+            render: (colaboratori: { id: string; plata: number }[]) => `${calculateTotalCosturiPerShow(colaboratori)} lei`,
+        },
+    ];
+
+
+    return (
+        <div>
+            <Typography.Title level={5}>Salarii angajați</Typography.Title>
+            <Table
+                dataSource={angajati}
+                columns={angajatiColumns}
+                loading={loadingAngajati}
+                rowKey="id"
+                pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                size="small"
+                scroll={{ x: 'max-content' }}
+                footer={() => (
+                    <div style={{ textAlign: 'right' }}>
+                        <Typography.Text strong>Total: {calculateTotalSalariiAngajati()} lei</Typography.Text>
+                    </div>
+                )}
+            />
+
+            <Typography.Title level={5} style={{ marginTop: 24 }}>Costuri colaboratori</Typography.Title>
+            <Space direction="horizontal" size={10} style={{ marginBottom: 5 }}>
+                <DatePicker.RangePicker
+                    format="DD-MM-YYYY"
+                    value={selectedDataDates}
+                    onChange={(dates) => setSelectedDataDates(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
+                />
+                <Button onClick={handleDataSearch} disabled={!selectedDataDates}>
+                    Căutare
+                </Button>
+                <Button onClick={handleDataResetFilters}>
+                    Resetare
+                </Button>
+            </Space>
+            <Table
+                dataSource={spectacole}
+                loading={loadingSpectacole}
+                columns={spectacoleColumns}
+                pagination={{ pageSize: 10, hideOnSinglePage: true }}
+                rowKey="id"
+                size="small"
+                scroll={{ x: 'max-content' }}
+                footer={() => (
+                    <div style={{ textAlign: 'right' }}>
+                        <Typography.Text strong>Total: {calculateTotalCosturiColaboratori()} lei</Typography.Text>
+                    </div>
+                )}
+            />
+			<br />
+			<br />
+			<div style={{ textAlign: 'right' }}>
+				<Typography.Text strong>Total costuri: {calculateTotalSalariiAngajati() + calculateTotalCosturiColaboratori()} lei</Typography.Text>
+			</div>
+        </div>
+    );
 };
 
 export default Costuri;
