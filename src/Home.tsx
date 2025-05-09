@@ -67,15 +67,59 @@ const Home: React.FC = () => {
   const [menuItems, setMenuItems] = useState<any[]>([]);
 
   useEffect(() => {
+    const checkStoredInactivityLogout = async () => {
+      const storedLogoutTime = localStorage.getItem('logoutDueTime');
+      if (storedLogoutTime) {
+        const logoutDueTime = parseInt(storedLogoutTime, 10);
+        if (Date.now() >= logoutDueTime) {
+          const auth = getAuth();
+          if (auth.currentUser) {
+            try {
+              await signOut(auth);
+              message.info("Ați fost deconectat automat din cauza inactivității dintr-o sesiune anterioară.");
+            } catch (error) {
+              console.error("Eroare la deconectarea automată la încărcare:", error);
+              message.error("Eroare la deconectarea automată la încărcare.");
+              setCurrentUser(null);
+              setIsAuthenticated(false);
+              setUserProfile(null);
+              setMenuItems([]);
+              setSelectedItem(null);
+              localStorage.removeItem("selectedMenuItem");
+              localStorage.removeItem('logoutDueTime');
+              setIsLoadingProfile(false);
+              setIsLoadingAuth(false);
+            }
+          } else {
+            localStorage.removeItem('logoutDueTime');
+            if (isAuthenticated) {
+                setCurrentUser(null);
+                setIsAuthenticated(false);
+                setUserProfile(null);
+                setMenuItems([]);
+                setSelectedItem(null);
+                localStorage.removeItem("selectedMenuItem");
+                setIsLoadingProfile(false);
+            }
+            setIsLoadingAuth(false);
+          }
+        }
+      }
+    };
+
+    checkStoredInactivityLogout();
+  }, []);
+
+
+  useEffect(() => {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setIsLoadingAuth(true);
-      setIsLoadingProfile(true);
-
 
       if (user) {
         setCurrentUser(user);
         setIsAuthenticated(true);
+        setIsLoadingProfile(true);
         try {
           const userDocRef = doc(db, "utilizatori", user.uid);
           const userDocSnap = await getDoc(userDocRef);
@@ -97,7 +141,7 @@ const Home: React.FC = () => {
                 case "Coordonator":
                     currentMenuItems = getCoordinatorMenuItems();
                     break;
-                case "Artist": 
+                case "Artist":
                     currentMenuItems = getViewerMenuItems();
                     break;
                 default:
@@ -119,16 +163,12 @@ const Home: React.FC = () => {
           } else {
             console.error("Documentul utilizatorului nu a fost găsit în Firestore!");
             message.error("Profilul utilizatorului nu a putut fi încărcat. Contactați administratorul.");
-            localStorage.removeItem("selectedMenuItem");
-            handleLogout(); 
+            await signOut(auth);
           }
         } catch (error) {
           console.error("Eroare la preluarea profilului din Firestore:", error);
           message.error("Eroare la încărcarea profilului.");
-          setUserProfile(null); 
-          setMenuItems([]); 
-          setSelectedItem(null); 
-          localStorage.removeItem("selectedMenuItem"); 
+          await signOut(auth);
         } finally {
            setIsLoadingProfile(false);
         }
@@ -139,6 +179,7 @@ const Home: React.FC = () => {
         setMenuItems([]);
         setSelectedItem(null);
         localStorage.removeItem("selectedMenuItem");
+        localStorage.removeItem('logoutDueTime');
         setIsLoadingProfile(false);
       }
       setIsLoadingAuth(false);
@@ -149,7 +190,7 @@ const Home: React.FC = () => {
 
   useEffect(() => {
     let inactivityTimer: NodeJS.Timeout | undefined;
-    const INACTIVITY_TIMEOUT_DURATION_MS = 10 * 60 * 1000; 
+    const INACTIVITY_TIMEOUT_DURATION_MS = 10 * 60 * 1000;
 
     const performSignOut = async (reasonMessage: string) => {
       const auth = getAuth();
@@ -157,32 +198,42 @@ const Home: React.FC = () => {
         try {
           await signOut(auth);
           message.info(`Ați fost deconectat automat. ${reasonMessage}`);
+        } catch (error) {
+          console.error("Eroare la deconectarea automată:", error);
+          message.error("Eroare la deconectarea automată.");
           setCurrentUser(null);
           setIsAuthenticated(false);
           setUserProfile(null);
           setMenuItems([]);
           setSelectedItem(null);
           localStorage.removeItem("selectedMenuItem");
-        } catch (error) {
-          console.error("Eroare la deconectarea automată:", error);
-          message.error("Eroare la deconectarea automată.");
+          localStorage.removeItem('logoutDueTime');
         }
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setUserProfile(null);
+        setMenuItems([]);
+        setSelectedItem(null);
+        localStorage.removeItem("selectedMenuItem");
+        localStorage.removeItem('logoutDueTime');
       }
     };
 
     const resetInactivityTimer = () => {
       clearTimeout(inactivityTimer);
+      const newLogoutDueTime = Date.now() + INACTIVITY_TIMEOUT_DURATION_MS;
+      localStorage.setItem('logoutDueTime', newLogoutDueTime.toString());
       inactivityTimer = setTimeout(() => {
         performSignOut("Motiv: inactivitate.");
       }, INACTIVITY_TIMEOUT_DURATION_MS);
     };
 
     const handleUserActivity = () => {
-      if (isAuthenticated && currentUser) { 
+      if (isAuthenticated && currentUser) {
         resetInactivityTimer();
       }
     };
-
 
     const activityEventTypes: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
 
@@ -198,7 +249,7 @@ const Home: React.FC = () => {
       clearTimeout(inactivityTimer);
       activityEventTypes.forEach(eventType => window.removeEventListener(eventType, handleUserActivity));
     };
-  }, [isAuthenticated, currentUser]); 
+  }, [isAuthenticated, currentUser]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -222,17 +273,12 @@ const Home: React.FC = () => {
 
   const handleLogout = () => {
     const auth = getAuth();
-    signOut(auth).then(() => {
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-        setUserProfile(null);
-        setMenuItems([]);
-        setSelectedItem(null);
-        localStorage.removeItem("selectedMenuItem");
-    }).catch((error) => {
-      console.error("Eroare la deconectare:", error);
-      message.error("Eroare la deconectare.");
-    });
+    signOut(auth)
+      .catch((error) => {
+        console.error("Eroare la deconectare:", error);
+        message.error("Eroare la deconectare.");
+        localStorage.removeItem('logoutDueTime');
+      });
   };
 
   dayjs.locale("ro");
@@ -319,14 +365,14 @@ const Home: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             height: '100vh',
-            overflowY: 'hidden', 
-            position: 'sticky',  
-            top: 0,              
-            zIndex: 1            
+            overflowY: 'hidden',
+            position: 'sticky',
+            top: 0,
+            zIndex: 1
           }}
         >
 
-          <div style={{ flex: '1 1 auto', overflowY: 'auto', 
+          <div style={{ flex: '1 1 auto', overflowY: 'auto',
             minHeight: 0 }}>
             {!collapsed && userProfile && (
               <div style={{ marginBottom:'10px', padding: '5px', textAlign: 'center' }}>
@@ -373,25 +419,25 @@ const Home: React.FC = () => {
         <Layout style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
           <Content
              style={{
-               flex: '1 1 auto', 
+               flex: '1 1 auto',
                padding: 24,
-               minHeight: 280, 
+               minHeight: 280,
                background: '#fff',
-               overflow: 'auto' 
+               overflow: 'auto'
              }}
           >
             {renderLayoutContent()}
           </Content>
-          <Footer style={{ textAlign: "center", flexShrink: 0 }}> 
+          <Footer style={{ textAlign: "center", flexShrink: 0 }}>
             <Space direction="horizontal" size={1}>
             <button onClick={() => window.open("https://github.com/levente-nagy/management-teatru", "_blank")} style={{ background: '#f5f5f5', color:"black", border: 'none', cursor: 'pointer', height: '35px', width: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <GithubOutlined/>
             </button>
             Levente NAGY © {new Date().getFullYear()}
-            
-             
+
+
             </Space>
-            
+
           </Footer>
         </Layout>
       </Layout>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Modal, Table, Form, Input, Space, DatePicker, TimePicker, Select, message, InputNumber, Popconfirm, Tooltip, Typography, Spin } from 'antd';
+import { Button, Modal, Table, Form, Input, Space, DatePicker, TimePicker, Select, message, InputNumber, Popconfirm, Tooltip, Typography, Spin, Descriptions } from 'antd';
 import type { TableProps } from 'antd';
 import { db } from '../Firebase';
 import { collection, addDoc, getDocs, where, query, updateDoc, doc, getDoc, deleteDoc, limit } from 'firebase/firestore';
@@ -921,27 +921,28 @@ const Spectacole: React.FC<SpectacoleProps> = ({ userId, userRole, userEmail }) 
         footer={null}
       >
         <br />
-        {selectedActori.length > 0 && (
-          <>
-            <div><b>Actori:</b></div>
-            <ul className="actor-list">
-              {selectedActori.map((actorName, index) => <li key={`actor-${index}`}>{actorName}</li>)}
-            </ul>
-            <br />
-          </>
-        )}
-        {selectedColaboratori.length > 0 && (
-          <>
-            <div><b>Colaboratori:</b></div>
-            <ul className="colaborator-list">
-              {selectedColaboratori.map((colaboratorName, index) => <li key={`colab-${index}`}>{colaboratorName}</li>)}
-            </ul>
-          </>
-        )}
-        {selectedActori.length === 0 && selectedColaboratori.length === 0 && (
+        {(selectedActori.length > 0 || selectedColaboratori.length > 0) ? (
+          <Descriptions bordered column={1} size="small" labelStyle={{ fontWeight: '600' }}>
+            {selectedActori.length > 0 && (
+              <Descriptions.Item label="Actori" >
+                <ul style={{ paddingLeft: 0, listStyleType: 'none', margin: 0 }}>
+                  {selectedActori.map((actorName, index) => <li key={`actor-${index}`}>{actorName}</li>)}
+                </ul>
+              </Descriptions.Item>
+            )}
+            {selectedColaboratori.length > 0 && (
+              <Descriptions.Item label="Colaboratori">
+                <ul style={{ paddingLeft: 0, listStyleType: 'none', margin: 0 }}>
+                  {selectedColaboratori.map((colaboratorName, index) => <li key={`colab-${index}`}>{colaboratorName}</li>)}
+                </ul>
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+        ) : (
           <p>Nu sunt actori sau colaboratori selectați.</p>
         )}
       </Modal>
+
 
       <Modal
         title="Detalii bilete"

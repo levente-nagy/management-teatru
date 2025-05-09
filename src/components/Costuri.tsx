@@ -236,13 +236,13 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
                 </Typography.Title>
             </div>
 
-            <Typography.Title level={5} style={{ marginTop: 24 }}>Salarii angajați</Typography.Title>
+            <Typography.Title level={5} style={{ marginTop: 24, marginBottom:24 }}>Salarii angajați</Typography.Title>
             <Input.Search
                 placeholder="Căutare după nume/prenume"
                 allowClear
                 onChange={(e) => setSearchTermAngajati(e.target.value)}
                 onSearch={(value) => setSearchTermAngajati(value)}
-                style={{ marginBottom: 16, width: 300 }}
+                style={{ marginBottom: 24, width: 300 }}
             />
             <Table
                 dataSource={filteredAngajati}
@@ -253,20 +253,20 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
                 size="small"
                 scroll={{ x: 'max-content' }}
                 footer={() => (
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'right'}}>
                         <Typography.Text strong>Total salarii brute: {totalSalariiCalculat} lei</Typography.Text>
                     </div>
                 )}
             />
 
-            <Typography.Title level={5} style={{ marginTop: 24 }}>Costuri colaboratori per spectacol</Typography.Title>
+            <Typography.Title level={5} style={{ marginTop: 24, marginBottom:24 }}>Costuri colaboratori per spectacol</Typography.Title>
    
             <Input.Search
                 placeholder="Cautare după titlu spectacol"
                 allowClear
                 onChange={(e) => setSearchTermSpectacole(e.target.value)}
                 onSearch={(value) => setSearchTermSpectacole(value)}
-                style={{ marginBottom: 16, width: 300 }}
+                style={{ marginBottom: 24, width: 300 }}
             />
             <Table
                 dataSource={filteredSpectacole}
