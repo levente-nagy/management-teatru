@@ -376,7 +376,7 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
             }}
             onSearch={() => handleSearch()}
             style={{ width: 300 }}
-            
+            allowClear
           />
         </Space>
         
@@ -391,9 +391,9 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
             onChange={(dates) => setSelectedDates(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
           />
           <Button onClick={handleSearch} disabled={!selectedDates && !searchTerm}>
-            Căutare
+            Filtrare
           </Button>
-          <Button onClick={handleResetFilters}>
+          <Button  onClick={handleResetFilters}>
             Resetare filtre
           </Button>
         </Space>
@@ -403,9 +403,9 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
         
       )}
     
-          <Space direction="horizontal" size={15} style={{ marginLeft: 16, display: 'flex', float: 'right' }}>
+          <Space direction="horizontal" size={10} style={{ marginLeft: 16, display: 'flex', float: 'right' }}>
           
-          <Button  shape="round" onClick={handleExportExcel} icon={<DownloadOutlined />} >
+          <Button   onClick={handleExportExcel} icon={<DownloadOutlined />} >
             Export Excel
           </Button>
           </Space>

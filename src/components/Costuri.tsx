@@ -233,6 +233,19 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
 
     return (
         <div>
+
+            <div style={{ 
+                position: 'sticky', 
+                top: 0, 
+                zIndex: 10, 
+                backgroundColor: 'white', 
+                padding: '10px 0', 
+                textAlign: 'right' 
+            }}>
+                <Typography.Title level={4} style={{ margin: 0 }}> 
+                    Total costuri: {calculateTotalSalariiAngajati() + calculateTotalCosturiColaboratori()} lei
+                </Typography.Title>
+            </div>
             <Typography.Title level={5}>Salarii angajați</Typography.Title>
             <Table
                 dataSource={angajati}
@@ -277,11 +290,7 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
                     </div>
                 )}
             />
-			<br />
-			<br />
-			<div style={{ textAlign: 'right' }}>
-				<Typography.Text strong>Total costuri: {calculateTotalSalariiAngajati() + calculateTotalCosturiColaboratori()} lei</Typography.Text>
-			</div>
+
         </div>
     );
 };

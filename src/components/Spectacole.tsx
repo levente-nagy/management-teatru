@@ -54,8 +54,8 @@ const Spectacole: React.FC<SpectacoleProps> = ({ userId, userRole, userEmail }) 
   const [selectedColaboratori, setSelectedColaborators] = useState<string[]>([]);
   const [bilete, setBilete] = useState<BiletType[]>([]);
   const [selectedDataDates, setSelectedDataDates] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
-  const [ticketTableData, setTicketTableData] = useState<{ spectacol_id: string, categorie_bilet: string; total_bilete: number; bilete_vandute: number; bilete_ramase: number }[]>([]);
-  const [incasariData, setIncasariData] = useState<{ categorie_bilet: string, total_earnings: number, bilete_vandute: number}[]>([]);
+  const [ticketTableData, setTicketTableData] = useState<{ spectacol_id: string, categorie_bilet: string; total_bilete: number; bilete_vandute: number; bilete_ramase: number; pret: number }[]>([]);
+  const [incasariData, setIncasariData] = useState<{ categorie_bilet: string, pret: number, total_earnings: number, bilete_vandute: number}[]>([]);
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [hasSelectedColaboratori, setHasSelectedColaboratori] = useState(false);
   const [colaboratorPayments, setColaboratorPayments] = useState<{ [key: string]: number }>({});
@@ -64,7 +64,7 @@ const Spectacole: React.FC<SpectacoleProps> = ({ userId, userRole, userEmail }) 
   const [artistId, setArtistId] = useState<string | null>(null);
   const [loadingArtistId, setLoadingArtistId] = useState(userRole === 'Artist');
   const [artistNotFound, setArtistNotFound] = useState(false);
-
+  const [searchTermSpectacol, setSearchTermSpectacol] = useState('');
 
   const canView = userRole === 'Administrator' || userRole === 'Casier' || userRole === 'Coordonator' || userRole === 'Artist';
   const canAddEdit = userRole === 'Administrator' || userRole === 'Coordonator';
@@ -132,7 +132,7 @@ const Spectacole: React.FC<SpectacoleProps> = ({ userId, userRole, userEmail }) 
     }
   };
 
-const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
+  const fetchSpectacolData = async (startDateOpt?: string, endDateOpt?: string, searchTitleOpt?: string) => {
     if (!userId || !canView || (userRole === 'Artist' && (loadingArtistId || artistNotFound))) {
         setData([]);
         if (userRole === 'Artist' && artistNotFound && !loadingArtistId) {
@@ -146,6 +146,10 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
     try {
         const userSpectacoleCollection = collection(db, 'spectacole');
         let q;
+
+        const startDate = startDateOpt;
+        const endDate = endDateOpt;
+        const currentSearchTitle = searchTitleOpt !== undefined ? searchTitleOpt : searchTermSpectacol;
 
         if (startDate && endDate) {
             q = query(
@@ -188,6 +192,13 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
             });
         }
 
+        if (currentSearchTitle && currentSearchTitle.trim() !== '') {
+            const lowercasedSearchTitle = currentSearchTitle.trim().toLowerCase();
+            fetchedData = fetchedData.filter(spectacol =>
+                spectacol.titlu.toLowerCase().includes(lowercasedSearchTitle)
+            );
+        }
+
         setData(fetchedData);
     } catch (error) {
         if ((error as any).code === 'failed-precondition') {
@@ -220,21 +231,21 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
   };
 
   useEffect(() => {
-      if (userId && canView) {
-          setLoadingArtistId(userRole === 'Artist');
-          setArtistNotFound(false);
-          setArtistId(null);
+    if (userId && canView) {
+        setLoadingArtistId(userRole === 'Artist');
+        setArtistNotFound(false);
+        setArtistId(null);
 
-          if (userRole === 'Artist') {
-              fetchArtistIdByEmail();
-          } else {
-              fetchSpectacolData();
-          }
-          fetchBileteData();
-          if (canAddEdit) {
-              fetchActorData();
-              fetchColaboratorData();
-          }
+        if (userRole === 'Artist') {
+            fetchArtistIdByEmail();
+        } else {
+            fetchSpectacolData(); 
+        }
+        fetchBileteData();
+        if (canAddEdit) {
+            fetchActorData();
+            fetchColaboratorData();
+        }
       } else {
           setData([]);
           setBilete([]);
@@ -247,12 +258,12 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
   }, [userId, userRole, userEmail]);
 
   useEffect(() => {
-      if (userRole === 'Artist') {
-          if (!loadingArtistId) {
-              fetchSpectacolData();
-          }
-      }
-  }, [loadingArtistId, userRole]);
+    if (userRole === 'Artist') {
+        if (!loadingArtistId) {
+            fetchSpectacolData(); 
+        }
+    }
+}, [loadingArtistId, userRole, artistId]);
 
   useEffect(() => {
     if (isModalVisible && editingSpectacol) {
@@ -370,23 +381,30 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
       message.error("Eroare la preluarea distribuției.");
     }
   };
-
   const showBileteModal = (spectacolId: string) => {
     if (!canView) return;
     const ticketsForSpectacol = bilete.filter(b => b.spectacol_id === spectacolId);
-    const ticketsByCategory = ticketsForSpectacol.reduce((acc, bilet) => {
-      if (!acc[bilet.categorie_bilet]) {
-        acc[bilet.categorie_bilet] = { total: 0, vandute: 0 };
+    
+    const ticketsByCatAndPrice = ticketsForSpectacol.reduce((acc, bilet) => {
+      const key = `${bilet.categorie_bilet}_${bilet.pret}`; 
+      if (!acc[key]) {
+        acc[key] = { 
+          total: 0, 
+          vandute: 0, 
+          pret: bilet.pret, 
+          categorie_bilet: bilet.categorie_bilet 
+        };
       }
-      acc[bilet.categorie_bilet].total += bilet.nr_bilete;
-      acc[bilet.categorie_bilet].vandute += (bilet.bilete_vandute ?? 0);
+      acc[key].total += bilet.nr_bilete;
+      acc[key].vandute += (bilet.bilete_vandute ?? 0);
       return acc;
-    }, {} as { [key: string]: { total: number, vandute: number } });
+    }, {} as { [key: string]: { total: number, vandute: number, pret: number, categorie_bilet: string } });
 
     setTicketTableData(
-      Object.entries(ticketsByCategory).map(([categorie_bilet, data]) => ({
+      Object.values(ticketsByCatAndPrice).map(data => ({
         spectacol_id: spectacolId,
-        categorie_bilet,
+        categorie_bilet: data.categorie_bilet,
+        pret: data.pret,
         total_bilete: data.total,
         bilete_vandute: data.vandute,
         bilete_ramase: data.total - data.vandute,
@@ -397,12 +415,18 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
 
   const showIncasariModal = (spectacolId: string) => {
     if (!canViewFinancials) return;
-    const selectedBilete = bilete.filter(bilet => bilet.spectacol_id === spectacolId);
-    const earnings = selectedBilete.map((bilet) => ({
+
+    const validBileteForSpectacol = bilete.filter(bilet => 
+      bilet.spectacol_id === spectacolId &&
+      typeof bilet.pret === 'number' 
+    );
+
+    const earnings = validBileteForSpectacol.map((bilet) => ({
       categorie_bilet: bilet.categorie_bilet,
+      pret: bilet.pret, 
       total_earnings: (bilet.bilete_vandute ?? 0) * bilet.pret,
       bilete_vandute: bilet.bilete_vandute ?? 0,
-    }));
+    })) as { categorie_bilet: string; pret: number; total_earnings: number; bilete_vandute: number }[];
 
     const total = earnings.reduce((sum, current) => sum + current.total_earnings, 0);
 
@@ -433,8 +457,12 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
     setSaving(true);
     try {
       const updates = ticketTableData.map(updatedTicket => {
+
         const existingTicket = bilete.find(
-          (bilet) => bilet.spectacol_id === updatedTicket.spectacol_id && bilet.categorie_bilet === updatedTicket.categorie_bilet
+          (bilet) => 
+            bilet.spectacol_id === updatedTicket.spectacol_id && 
+            bilet.categorie_bilet === updatedTicket.categorie_bilet &&
+            bilet.pret === updatedTicket.pret 
         );
         if (existingTicket) {
           const ticketDocRef = doc(db, 'bilete', existingTicket.key);
@@ -443,13 +471,13 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
             bilete_ramase: updatedTicket.bilete_ramase,
           });
         }
-        return Promise.resolve();
+        return Promise.resolve(); // 
       });
 
       await Promise.all(updates);
 
       message.success('Bilete actualizate cu succes!');
-      fetchBileteData();
+      fetchBileteData(); 
       setIsBileteModalVisible(false);
     } catch (error) {
       message.error('Eroare la actualizarea biletelor.');
@@ -458,18 +486,24 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
     }
   };
 
-  const handleDataSearch = () => {
+  const handleDataSearch = () => { 
     if (selectedDataDates) {
       const [startDate, endDate] = selectedDataDates;
-      fetchSpectacolData(startDate.format('DD-MM-YYYY'), endDate.format('DD-MM-YYYY'));
-    } else {
-        message.info('Selectați un interval de date pentru căutare.');
+      fetchSpectacolData(startDate.format('DD-MM-YYYY'), endDate.format('DD-MM-YYYY'), searchTermSpectacol);
     }
   };
-
+  
   const handleDataResetFilters = () => {
     setSelectedDataDates(null);
-    fetchSpectacolData();
+    setSearchTermSpectacol('');
+    fetchSpectacolData(undefined, undefined, ''); 
+  };
+  
+ 
+  const onSpectacolTitleSearch = (titleValue: string) => {
+    const startDate = selectedDataDates ? selectedDataDates[0].format('DD-MM-YYYY') : undefined;
+    const endDate = selectedDataDates ? selectedDataDates[1].format('DD-MM-YYYY') : undefined;
+    fetchSpectacolData(startDate, endDate, titleValue);
   };
 
   const saveSpectacol = async () => {
@@ -533,8 +567,13 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
     if (!canViewFinancials) return 0;
     let total = 0;
     spectacoleData.forEach(spectacol => {
-        const spectacolBilete = bileteData.filter(bilet => bilet.spectacol_id === spectacol.key);
-        const spectacolEarnings = spectacolBilete.reduce((sum, bilet) => sum + ((bilet.bilete_vandute ?? 0) * bilet.pret), 0);
+        const spectacolBilete = bileteData.filter(bilet => 
+            bilet.spectacol_id === spectacol.key &&
+            typeof bilet.pret === 'number' 
+        );
+        const spectacolEarnings = spectacolBilete.reduce((sum, bilet) => {
+            return sum + ((bilet.bilete_vandute ?? 0) * bilet.pret);
+        }, 0);
         total += spectacolEarnings;
     });
     return total;
@@ -633,7 +672,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
     ...(canAddEdit || canDelete ? [{
         title: 'Acțiuni',
         key: 'action',
-        width: 100,
+        width: 50,
         render: (_: any, record: Spectacol) => (
             <Space size="middle">
                 {canAddEdit && (
@@ -678,31 +717,60 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
 
       <br/>
       <br/>
-      <Space direction="horizontal" size={15} style={{ marginBottom: 16 }}>
+      <br/>
+      <Space direction="vertical" size={15} style={{ marginBottom: 16, width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Space direction="horizontal">
+      <Input.Search
+            placeholder="Cautare după titlu"
+            value={searchTermSpectacol}
+            onChange={(e) => {
+              const currentSearchValue = e.target.value;
+              setSearchTermSpectacol(currentSearchValue);
+              if (currentSearchValue === '') {
+                const startDate = selectedDataDates ? selectedDataDates[0].format('DD-MM-YYYY') : undefined;
+                const endDate = selectedDataDates ? selectedDataDates[1].format('DD-MM-YYYY') : undefined;
+                fetchSpectacolData(startDate, endDate, '');
+              }
+            }}
+            onSearch={onSpectacolTitleSearch} 
+            style={{ width: 300 }}
+            allowClear
+            
+        />
+    </Space>
+    <Space direction="horizontal" size={15}>
+     <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ marginRight: 8 }}>Filtare după dată:</span>
+          </div>
         <DatePicker.RangePicker
           format="DD-MM-YYYY"
           value={selectedDataDates}
           onChange={(dates) => setSelectedDataDates(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
         />
         <Button onClick={handleDataSearch} disabled={!selectedDataDates}>
-          Căutare după dată
+          Filtare
         </Button>
         <Button onClick={handleDataResetFilters}>
           Resetare filtre
         </Button>
+        </Space>
+    </div>
       </Space>
       {canView && (
-        <Space direction="horizontal" size={15} style={{ marginLeft: 16 }}>
+         <Space direction="horizontal" size={10} style={{ marginLeft: 16, display: 'flex', float: 'right' }}>
             <Button
               icon={<DownloadOutlined />}
               onClick={handleExportExcel}
               disabled={data.length === 0}
-              shape="round"
             >
-              Export
+              Export Excel
             </Button>
             </Space>
+            
         )}
+      <br/>
+      <br/>
       <br/>
       <br/>
       <Table
@@ -829,12 +897,13 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
                   name={`plata_colaborator_${colaboratorId}`}
                   rules={[{ required: true, message: 'Introduceți plata!' }]}
                 >
+                 
                   <InputNumber
                     style={{ width: 150 }}
                     addonAfter="lei"
-                    min={0}
-                    parser={(value) => Number(value?.replace(/\D/g, '') || 0)}
-                    formatter={(value) => `${value}`.replace(/\D/g, '')}
+                    min={1}
+                    parser={(value) => parseInt(value?.replace(/\D/g, '') || '0', 10) || 1}
+                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                     onChange={(value) => {
                       setColaboratorPayments((prev) => ({ ...prev, [colaboratorId]: Number(value) || 0 }));
                     }}
@@ -887,6 +956,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
               dataSource={ticketTableData}
               columns={[
                 { title: 'Categorie', dataIndex: 'categorie_bilet', key: 'categorie_bilet' },
+                { title: 'Preț (lei)', dataIndex: 'pret', key: 'pret' }, 
                 { title: 'Total bilete', dataIndex: 'total_bilete', key: 'total_bilete' },
                 {
                   title: 'Bilete vândute',
@@ -906,7 +976,7 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
                 { title: 'Bilete rămase', dataIndex: 'bilete_ramase', key: 'bilete_ramase' },
               ]}
               pagination={false}
-              rowKey="categorie_bilet"
+              rowKey={(record) => `${record.categorie_bilet}-${record.pret}`}
               size="small"
             />
             <br />
@@ -933,11 +1003,12 @@ const fetchSpectacolData = async (startDate?: string, endDate?: string) => {
             <Table
               dataSource={incasariData}
               columns={[
-                { title: 'Categorie bilete', dataIndex: 'categorie_bilet', key: 'categorie_bilet' },
+                { title: 'Categorie', dataIndex: 'categorie_bilet', key: 'categorie_bilet' },
+                { title: 'Preț (lei)', dataIndex: 'pret', key: 'pret' }, 
                 { title: 'Bilete vândute', dataIndex: 'bilete_vandute', key: 'bilete_vandute' },
                 { title: 'Încasări (lei)', dataIndex: 'total_earnings', key: 'total_earnings' },
               ]}
-              rowKey="categorie_bilet"
+              rowKey={(record) => `${record.categorie_bilet}-${record.pret}`} 
               pagination={false}
               size="small"
               footer={() => <div style={{textAlign: 'right'}}><Typography.Text strong>Total: {totalEarnings} lei</Typography.Text></div>}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Modal, Table, Form, Space, InputNumber, Select, message, Popconfirm, Tooltip } from 'antd';
+import { Button, Modal, Table, Form, Space, InputNumber, Select, message, Popconfirm, Tooltip, Input } from 'antd';
 import type { TableProps } from 'antd';
 import { db } from '../Firebase';
 import { collection, addDoc, getDocs, query, doc, updateDoc, deleteDoc, where } from 'firebase/firestore'; 
@@ -40,6 +40,8 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false); 
   const [saving, setSaving] = useState(false);
+  const [searchTermBileteSpectacol, setSearchTermBileteSpectacol] = useState('');
+
 
 
   const canView = userRole === 'Administrator' || userRole === 'Casier' || userRole === 'Coordonator';
@@ -72,8 +74,8 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
     }
   };
 
-  const fetchBileteData = async () => {
-    if (!userId || !canView) { 
+  const fetchBileteData = async (searchTitleOpt?: string) => {
+    if (!userId || !canView) {
         setBilete([]);
         return;
     }
@@ -82,7 +84,7 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
       const userBileteCollection = collection(db, 'bilete');
       const q = query(userBileteCollection);
       const querySnapshot = await getDocs(q);
-      const fetchedData = querySnapshot.docs.map(doc => {
+      let fetchedData = querySnapshot.docs.map(doc => {
         const raw = doc.data() as Omit<BiletType, 'key'>;
         const titlu = spectacole.find(s => s.key === raw.spectacol_id)?.titlu || 'Necunoscut';
         return {
@@ -93,6 +95,15 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
           spectacolTitlu: titlu,
         };
       }) as Array<BiletType & { spectacolTitlu: string }>;
+
+      const currentSearchTitle = searchTitleOpt !== undefined ? searchTitleOpt.trim().toLowerCase() : searchTermBileteSpectacol.trim().toLowerCase();
+
+      if (currentSearchTitle) {
+        fetchedData = fetchedData.filter(bilet =>
+          bilet.spectacolTitlu.toLowerCase().includes(currentSearchTitle)
+        );
+      }
+
       setBilete(fetchedData.sort((a, b) =>
         a.spectacolTitlu.localeCompare(b.spectacolTitlu)
       ));
@@ -172,9 +183,50 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
             return;
         }
 
-        biletData.bilete_ramase = nrBileteNum - editingBilet.bilete_vandute;
-        biletData.bilete_vandute = editingBilet.bilete_vandute;
+        const newSpectacolId = values.spectacol;
+        const newCategorie = values.categorie_bilet;
+        const newPret = Number(values.pret);
 
+        const identityChanged = newSpectacolId !== editingBilet.spectacol_id ||
+                                newCategorie !== editingBilet.categorie_bilet ||
+                                newPret !== editingBilet.pret;
+
+        if (identityChanged) {
+            
+            const qCollision = query(
+                userBileteCollection,
+                where('spectacol_id', '==', newSpectacolId),
+                where('categorie_bilet', '==', newCategorie),
+                where('pret', '==', newPret)
+            );
+            const collisionSnap = await getDocs(qCollision);
+
+            if (!collisionSnap.empty) {
+                const collidingDoc = collisionSnap.docs[0];
+               
+                if (collidingDoc.id !== editingBilet.key) {
+                    
+                    const collidingData = collidingDoc.data() as BiletType;
+
+                    await updateDoc(collidingDoc.ref, {
+                        nr_bilete: collidingData.nr_bilete + nrBileteNum,
+                        bilete_vandute: (collidingData.bilete_vandute || 0) + editingBilet.bilete_vandute,
+                        bilete_ramase: (collidingData.bilete_ramase ?? 0) + (nrBileteNum - editingBilet.bilete_vandute)
+                    });
+
+                    await deleteDoc(biletDocRef); 
+                    message.success('Biletele au fost contopite cu o categorie existentă datorită modificării specificațiilor!');
+                    
+                    handleCancel();
+                    fetchBileteData();
+                    setSaving(false);
+                    return; 
+                }
+            }
+        }
+
+        biletData.bilete_ramase = nrBileteNum - editingBilet.bilete_vandute;
+        biletData.bilete_vandute = editingBilet.bilete_vandute; 
         await updateDoc(biletDocRef, biletData);
         message.success('Categorie bilete actualizată!');
 
@@ -264,10 +316,11 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
         'Data': spectacol?.data || '-',
         'Ora': spectacol?.ora || '-',
         'Tip bilet': bilet.categorie_bilet,
+        'Preț (lei)': bilet.pret,
         'Total bilete': bilet.nr_bilete,
         'Bilete vândute': bilet.bilete_vandute,
         'Bilete rămase': bilet.bilete_ramase,
-        'Preț (lei)': bilet.pret,
+       
       };
     });
 
@@ -283,6 +336,11 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
     }
   };
 
+  const onBileteSpectacolSearch = (searchValue: string) => {
+    fetchBileteData(searchValue);
+  };
+
+
   const columns: TableProps<BiletType & { spectacolTitlu: string }>['columns'] = [
     {
       title: 'Spectacol',
@@ -293,12 +351,13 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
     },
     { title: 'Data', dataIndex: 'spectacol_id', key: 'data', align: 'center', render: (spectacolId) => spectacole.find((s) => s.key === spectacolId)?.data || 'Necunoscută' },
     { title: 'Ora', dataIndex: 'spectacol_id', key: 'ora', align: 'center', render: (spectacolId) => spectacole.find((s) => s.key === spectacolId)?.ora || 'Necunoscută' },
-    { title: 'Tip bilet', dataIndex: 'categorie_bilet', key: 'categorie_bilet', align: 'center' },
+    { title: 'Categorie', dataIndex: 'categorie_bilet', key: 'categorie_bilet', align: 'center' },
+    ...(canAddEdit ? [{ title: 'Preț (lei)', dataIndex: 'pret', key: 'pret', width: 100 }] : []),
     { title: 'Total bilete', dataIndex: 'nr_bilete', key: 'nr_bilete', align: 'center', width: 100 },
     { title: 'Bilete vândute', dataIndex: 'bilete_vandute', key: 'bilete_vandute', align: 'center', width: 100 },
     { title: 'Bilete rămase', dataIndex: 'bilete_ramase', key: 'bilete_ramase', align: 'center', width: 100 },
 
-    ...(canAddEdit ? [{ title: 'Preț (lei)', dataIndex: 'pret', key: 'pret', width: 100 }] : []),
+
  
     ...(canAddEdit || canDelete || canSell ? [{
       title: 'Acțiuni',
@@ -341,25 +400,49 @@ const Bilete: React.FC<BileteProps> = ({ userId, userRole }) => {
   return (
     <>
       
-      {canAddEdit && ( 
-        <Button type="primary" shape="round" onClick={() => showModal()}>
-          Adăugare categorie bilete
-        </Button>
-      )}
-      <br/>
-      <br/>
-      {canView && (
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={handleExportExcel}
-              disabled={bilete.length === 0}
-              shape="round"
-            >
-              Export
-            </Button>
-        )}
-      <br />
-      <br />
+      <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
+      <Space>
+            {canAddEdit && (
+              <Button type="primary" shape="round" onClick={() => showModal()}>
+                Adăugare bilete
+              </Button>
+            )}
+          </Space>
+        <br />
+
+        <Space wrap style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+
+        
+            <Input.Search
+              placeholder="Caută după titlu spectacol"
+              value={searchTermBileteSpectacol}
+              onChange={(e) => {
+                const currentSearchValue = e.target.value;
+                setSearchTermBileteSpectacol(currentSearchValue);
+                if (currentSearchValue === '') {
+                  fetchBileteData('');
+                }
+              }}
+              onSearch={onBileteSpectacolSearch}
+              style={{ width: 300 }}
+              allowClear
+              
+            />
+            {canView && (
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={handleExportExcel}
+                disabled={bilete.length === 0}
+                
+              >
+                Export Excel
+              </Button>
+            )}
+         
+          
+        </Space>
+      </Space>
+      <br/><br/>
       <Table<BiletType & { spectacolTitlu: string }>
         columns={columns}
         dataSource={bilete}
