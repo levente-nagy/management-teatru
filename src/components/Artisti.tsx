@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Modal, Table, Form, Input, Space, DatePicker, InputNumber, Select, message, Popconfirm, Tooltip } from 'antd';
+import { Button, Modal, Table, Form, Input, Space, DatePicker, InputNumber, Select, message, Popconfirm, Tooltip, Descriptions, Flex } from 'antd';
 import type { TableProps } from 'antd';
 import { db } from '../Firebase';
 import { collection, addDoc, getDocs, where, query, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import dayjs from 'dayjs';
-import { EditOutlined, DeleteOutlined, QuestionCircleOutlined, DownloadOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, QuestionCircleOutlined, DownloadOutlined, EyeOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 
 interface ActorType {
   key: string;
   nume: string;
   prenume: string;
-  email?: string; 
+  email?: string;
   CNP?: string;
   carte_identitate?: string;
   profesie: string;
@@ -25,7 +25,7 @@ interface ActorType {
 }
 
 interface ActoriProps {
-  userId: string; 
+  userId: string;
   userRole: string;
 }
 
@@ -36,14 +36,17 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
   const [form] = Form.useForm();
   const [contractType, setContractType] = useState<string | undefined>(undefined);
   const [selectedDates, setSelectedDates] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isDetailsModalVisible, setIsDetailsModalVisible] = useState(false);
+  const [selectedActorForDetails, setSelectedActorForDetails] = useState<ActorType | null>(null);
 
   const canAddEditDelete = userRole === 'Administrator' || userRole === 'Resurse umane';
   const canViewSensitiveData = userRole === 'Administrator' || userRole === 'Resurse umane';
   const canViewFullDetails = userRole === 'Administrator' || userRole === 'Resurse umane' || userRole === 'Coordonator';
 
-  const fetchActorData = async (startDate?: string, endDate?: string) => {
+  const fetchActorData = async (startDate?: string, endDate?: string, activeSearchTerm?: string) => {
     if (!userId || !canViewFullDetails) {
         setData([]);
         return;
@@ -62,10 +65,19 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
       }
 
       const querySnapshot = await getDocs(q);
-      const fetchedData = querySnapshot.docs.map((doc) => ({
+      let fetchedData = querySnapshot.docs.map((doc) => ({
         key: doc.id,
         ...(doc.data() as Omit<ActorType, 'key'>),
       }));
+
+      const termToFilter = activeSearchTerm !== undefined ? activeSearchTerm : searchTerm;
+      if (termToFilter) {
+        fetchedData = fetchedData.filter(actor =>
+          actor.nume.toLowerCase().includes(termToFilter.toLowerCase()) ||
+          actor.prenume.toLowerCase().includes(termToFilter.toLowerCase())
+        );
+      }
+
       setData(fetchedData);
     } catch (error) {
       console.error('Error fetching actors:', error);
@@ -80,7 +92,7 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
   };
 
   useEffect(() => {
-    fetchActorData();
+    fetchActorData(undefined, undefined, '');
   }, [userId, userRole]);
 
   const showModal = (actor: ActorType | null = null) => {
@@ -108,6 +120,16 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
     setContractType(undefined);
   };
 
+  const showDetailsModal = (actor: ActorType) => {
+    setSelectedActorForDetails(actor);
+    setIsDetailsModalVisible(true);
+  };
+
+  const handleDetailsModalCancel = () => {
+    setIsDetailsModalVisible(false);
+    setSelectedActorForDetails(null);
+  };
+
   const saveActor = async () => {
     if (!userId || !canAddEditDelete) {
       message.error("Operație nepermisă.");
@@ -122,7 +144,7 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
       const actorData: Omit<ActorType, 'key'> = {
         nume: values.nume,
         prenume: values.prenume,
-        email: values.email, 
+        email: values.email,
         CNP: values.CNP,
         carte_identitate: values.carte_identitate,
         profesie: values.profesie,
@@ -137,11 +159,11 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
 
       Object.keys(actorData).forEach(key => {
         const typedKey = key as keyof typeof actorData;
- 
+
         if (typedKey !== 'email' && (actorData[typedKey] === undefined || actorData[typedKey] === null || actorData[typedKey] === '')) {
           delete actorData[typedKey];
         }
-        
+
         if (typedKey === 'email' && typeof actorData.email !== 'string') {
             delete actorData.email;
         }
@@ -188,10 +210,10 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
       }
 
       handleCancel();
-      fetchActorData();
+      fetchActorData(selectedDates?.[0]?.format('DD-MM-YYYY'), selectedDates?.[1]?.format('DD-MM-YYYY'), searchTerm);
 
     } catch (error: any) {
-    
+
         if (error.errorFields) {
             console.log('Validation Failed:', error);
         } else {
@@ -213,7 +235,7 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
       const actorDocRef = doc(db, 'artisti', key);
       await deleteDoc(actorDocRef);
       message.success('Artist șters cu succes!');
-      fetchActorData();
+      fetchActorData(selectedDates?.[0]?.format('DD-MM-YYYY'), selectedDates?.[1]?.format('DD-MM-YYYY'), searchTerm);
     } catch (error) {
       console.error('Error deleting actor:', error);
       message.error('Eroare la ștergerea artistului.');
@@ -222,17 +244,19 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
   };
 
   const handleSearch = () => {
-    if (selectedDates) {
-      const [startDate, endDate] = selectedDates;
-      fetchActorData(startDate.format('DD-MM-YYYY'), endDate.format('DD-MM-YYYY'));
+    if (selectedDates || searchTerm) {
+      const start = selectedDates ? selectedDates[0].format('DD-MM-YYYY') : undefined;
+      const end = selectedDates ? selectedDates[1].format('DD-MM-YYYY') : undefined;
+      fetchActorData(start, end, searchTerm);
     } else {
-      message.info('Selectați un interval de date pentru căutare.');
+      message.info('Introduceți un nume sau selectați un interval de date pentru căutare.');
     }
   };
 
   const handleResetFilters = () => {
     setSelectedDates(null);
-    fetchActorData();
+    setSearchTerm('');
+    fetchActorData(undefined, undefined, '');
   };
 
   const handleExportExcel = () => {
@@ -282,52 +306,48 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
   };
 
   const baseColumns: TableProps<ActorType>['columns'] = [
-    { title: 'Nume', dataIndex: 'nume', key: 'nume',  width: 60, sorter: (a, b) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' },
-    { title: 'Prenume', dataIndex: 'prenume', key: 'prenume',  width: 60 },
-    { title: 'Email', dataIndex: 'email', key: 'email', width: 60, render: (email) => email || '-' }, 
-    { title: 'Profesia', dataIndex: 'profesie', key: 'profesie',  width: 60 },
-    { title: 'Funcția', dataIndex: 'functie', key: 'functie',  width: 60 },
+    { title: 'Nume', dataIndex: 'nume', key: 'nume',  width: 150, sorter: (a, b) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' },
+    { title: 'Prenume', dataIndex: 'prenume', key: 'prenume',  width: 150 },
+    { title: 'Email', dataIndex: 'email', key: 'email', width: 200, render: (email) => email || '-' },
+    { title: 'Profesia', dataIndex: 'profesie', key: 'profesie',  width: 150 },
+    { title: 'Funcția', dataIndex: 'functie', key: 'functie',  width: 150 },
+    { title: 'Tip contract', dataIndex: 'tip_contract', key: 'tip_contract',  width: 150, render: (tip_contract) => tip_contract || '-' },
   ];
 
-  const sensitiveColumns: TableProps<ActorType>['columns'] = canViewSensitiveData ? [
-    { title: 'CNP', dataIndex: 'CNP', key: 'CNP',  width: 60 },
-    { title: 'Carte identitate', dataIndex: 'carte_identitate', key: 'carte_identitate',  width: 60 },
-    { title: 'Tip contract', dataIndex: 'tip_contract', key: 'tip_contract',  width: 60 },
-    { title: 'Salariu brut (lei)', dataIndex: 'salariu_brut', key: 'salariu_brut',  width: 60, render: (val) => val || '-' },
-    { title: 'Impozite (lei)', dataIndex: 'impozite', key: 'impozite',  width: 60, render: (val) => val || '-' },
-    { title: 'Salariu net (lei)', dataIndex: 'salariu_net', key: 'salariu_net',  width: 60, render: (val) => val || '-' },
-    { title: 'Data început', dataIndex: 'data_inceput_contract', key: 'data_inceput_contract',  width: 60 },
-    { title: 'Perioadă (luni)', dataIndex: 'perioada_contract', key: 'perioada_contract',  width: 60, render: (val) => val || '-' },
-  ] : [];
-
-  const actionColumn: TableProps<ActorType>['columns'] = canAddEditDelete ? [
+  const actionColumn: TableProps<ActorType>['columns'] = [
     {
       title: 'Acțiuni',
       key: 'action',
-      fixed: 'right', 
-      width: 60,
+      width: 50,
       render: (_, record) => (
-        <Space size="middle">
-          <Tooltip title="Editare">
-            <Button type="link" style={{ color: 'black' }} icon={<EditOutlined />} onClick={() => showModal(record)} />
+        <Space size="small">
+          <Tooltip title="Vizualizare detalii">
+            <Button type="link" style={{ color: 'black' }} icon={<EyeOutlined />} onClick={() => showDetailsModal(record)}/>
           </Tooltip>
-          <Popconfirm
-            title="Sigur doriți să ștergeți acest artist?"
-            onConfirm={() => handleDelete(record.key)}
-            icon={<QuestionCircleOutlined style={{ color: 'red' }} />}
-            okText="Da"
-            cancelText="Nu"
-          >
-            <Tooltip title="Ștergere">
-              <Button  type="link" style={{ color: 'black' }} icon={<DeleteOutlined />} />
-            </Tooltip>
-          </Popconfirm>
+          {canAddEditDelete && (
+            <>
+              <Tooltip title="Editare">
+                <Button type="link" style={{ color: 'black' }} icon={<EditOutlined />} onClick={() => showModal(record)} />
+              </Tooltip>
+              <Popconfirm
+                title="Sigur doriți să ștergeți acest artist?"
+                onConfirm={() => handleDelete(record.key)}
+                icon={<QuestionCircleOutlined style={{ color: 'red' }} />}
+                okText="Da"
+                cancelText="Nu"
+              >
+                <Tooltip title="Ștergere">
+                  <Button type="link" style={{ color: 'black' }} icon={<DeleteOutlined />} />
+                </Tooltip>
+              </Popconfirm>
+            </>
+          )}
         </Space>
       ),
     },
-  ] : [];
+  ];
 
-  const columns = [...baseColumns, ...sensitiveColumns, ...actionColumn];
+  const columns = [...baseColumns, ...actionColumn];
 
   return (
     <>
@@ -339,31 +359,58 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
           </Button>
         )}
 
-      <br/><br />
+      <br/><br /><br />
       {canViewSensitiveData && (
-        <Space direction="horizontal" size={15} style={{ marginBottom: 16 }}>
+        <Space direction="vertical" size={15} style={{ marginBottom: 16, width: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Space direction="horizontal">
+          <Input.Search
+            placeholder="Căutare după nume/prenume"
+            value={searchTerm}
+            onChange={(e) => {
+              const currentSearchTermValue = e.target.value;
+              setSearchTerm(currentSearchTermValue);
+              if (currentSearchTermValue === '') {
+                fetchActorData(selectedDates ? selectedDates[0].format('DD-MM-YYYY') : undefined, selectedDates ? selectedDates[1].format('DD-MM-YYYY') : undefined, '');
+              }
+            }}
+            onSearch={() => handleSearch()}
+            style={{ width: 300 }}
+            
+          />
+        </Space>
+        
+
+        <Space direction="horizontal" size={15}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ marginRight: 8 }}>Filtare după dată:</span>
+          </div>
           <DatePicker.RangePicker
             format="DD-MM-YYYY"
             value={selectedDates}
             onChange={(dates) => setSelectedDates(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
           />
-          <Button onClick={handleSearch} disabled={!selectedDates}>
-            Căutare după dată contract
+          <Button onClick={handleSearch} disabled={!selectedDates && !searchTerm}>
+            Căutare
           </Button>
           <Button onClick={handleResetFilters}>
             Resetare filtre
           </Button>
         </Space>
+        </div>
+
+      </Space>
         
       )}
-         {canAddEditDelete && (
-          <Space direction="horizontal" size={15} style={{ marginLeft: 16 }}>
+    
+          <Space direction="horizontal" size={15} style={{ marginLeft: 16, display: 'flex', float: 'right' }}>
+          
           <Button  shape="round" onClick={handleExportExcel} icon={<DownloadOutlined />} >
-            Export
+            Export Excel
           </Button>
           </Space>
-      )}
-      <br/><br/> 
+
+      <br/><br/><br /><br />
       <Table<ActorType>
         columns={columns}
         dataSource={data}
@@ -505,6 +552,46 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
           )}
         </Form>
       </Modal>
+
+    {selectedActorForDetails && (
+        <Modal
+        title="Detalii artist"
+        open={isDetailsModalVisible}
+        onCancel={handleDetailsModalCancel}
+        footer={[
+          <Button key="back" onClick={handleDetailsModalCancel}>
+            Închidere
+          </Button>,
+        ]}
+        width={500}
+      >
+        <br />
+        <Descriptions bordered column={1} size="small" labelStyle={{ fontWeight: '600' }}>
+          <Descriptions.Item label="Nume">{selectedActorForDetails.nume}</Descriptions.Item>
+          <Descriptions.Item label="Prenume">{selectedActorForDetails.prenume}</Descriptions.Item>
+          <Descriptions.Item label="Email">{selectedActorForDetails.email || '-'}</Descriptions.Item>
+          <Descriptions.Item label="Profesia">{selectedActorForDetails.profesie}</Descriptions.Item>
+          <Descriptions.Item label="Funcția">{selectedActorForDetails.functie}</Descriptions.Item>
+          <Descriptions.Item label="Tip contract">{selectedActorForDetails.tip_contract || '-'}</Descriptions.Item>
+          {canViewSensitiveData && (
+            <>
+              <Descriptions.Item label="CNP">{selectedActorForDetails.CNP || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Carte identitate">{selectedActorForDetails.carte_identitate || '-'}</Descriptions.Item>
+              
+              {selectedActorForDetails.tip_contract === 'Angajat' && (
+                <>
+              <Descriptions.Item label="Salariu brut (lei)">{selectedActorForDetails.salariu_brut !== undefined ? selectedActorForDetails.salariu_brut : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Impozite (lei)">{selectedActorForDetails.impozite !== undefined ? selectedActorForDetails.impozite : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Salariu net (lei)">{selectedActorForDetails.salariu_net !== undefined ? selectedActorForDetails.salariu_net : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Data început contract">{selectedActorForDetails.data_inceput_contract || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Perioadă contract (luni)">{selectedActorForDetails.perioada_contract !== undefined ? selectedActorForDetails.perioada_contract : '-'}</Descriptions.Item>
+              </>
+              )}
+              </>
+          )}
+        </Descriptions>
+      </Modal>
+      )}
     </>
   );
 };
