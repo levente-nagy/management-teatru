@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../Firebase';
-import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
-import { Button, DatePicker, Space, Table, message, Typography } from 'antd';
-import dayjs from 'dayjs';
+import { collection, getDocs, doc, getDoc, query } from 'firebase/firestore'; 
+import { Input, Table, message, Typography } from 'antd'; 
+
 
 interface Artist {
     id: string;
@@ -10,12 +10,14 @@ interface Artist {
     prenume: string;
     tip_contract: 'Angajat' | 'Colaborator';
     salariu_brut?: number;
+    salariu_net?: number;
+    impozite?: number;
 }
 
 interface Spectacol {
     id: string;
     titlu: string;
-    data: string;
+    data: string; 
     colaboratori: { id: string; plata: number }[];
 }
 
@@ -27,10 +29,12 @@ interface CosturiProps {
 const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
     const [spectacole, setSpectacole] = useState<Spectacol[]>([]);
     const [colaboratorNames, setColaboratorNames] = useState<{ [key: string]: string }>({});
-    const [selectedDataDates, setSelectedDataDates] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
     const [loadingSpectacole, setLoadingSpectacole] = useState(false);
     const [angajati, setAngajati] = useState<Artist[]>([]);
     const [loadingAngajati, setLoadingAngajati] = useState(false);
+    const [searchTermAngajati, setSearchTermAngajati] = useState('');
+    const [searchTermSpectacole, setSearchTermSpectacole] = useState('');
+
 
     const canView = userRole === 'Administrator' || userRole === 'Resurse umane';
 
@@ -60,7 +64,7 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
     };
 
 
-    const fetchSpectacoleData = async (startDate?: string, endDate?: string) => {
+    const fetchSpectacoleData = async () => { 
         if (!userId || !canView) {
             setSpectacole([]);
             return;
@@ -68,23 +72,14 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
         setLoadingSpectacole(true);
         try {
             const userSpectacoleCollection = collection(db, 'spectacole');
-            let q;
-            if (startDate && endDate) {
-                q = query(
-                    userSpectacoleCollection,
-                    where('data', '>=', startDate),
-                    where('data', '<=', endDate)
-                );
-            } else {
-                q = query(userSpectacoleCollection);
-            }
+            const q = query(userSpectacoleCollection); 
             const querySnapshot = await getDocs(q);
             const fetchedData = querySnapshot.docs.map((doc) => {
                 const data = doc.data();
                 return {
                     id: doc.id,
                     titlu: data.titlu,
-                    data: data.data,
+                    data: data.data, 
                     colaboratori: data.colaboratori || [],
                 };
             });
@@ -93,11 +88,7 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
             fetchColaboratorNames(spectacoleCuColaboratori);
         } catch (error) {
             console.error('Error fetching spectacole:', error);
-            if ((error as any).code === 'failed-precondition') {
-                message.error('Index Firestore necesar pentru filtrarea după dată. Verificați consola Firebase.');
-            } else {
-                message.error('Eroare la preluarea spectacolelor.');
-            }
+            message.error('Eroare la preluarea spectacolelor.');
         } finally {
             setLoadingSpectacole(false);
         }
@@ -145,13 +136,13 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
     useEffect(() => {
         if (userId && canView) {
             fetchArtistiData();
-            fetchSpectacoleData();
+            fetchSpectacoleData(); 
         } else {
             setSpectacole([]);
             setColaboratorNames({});
             setAngajati([]);
         }
-    }, [userId, userRole]);
+    }, [userId, userRole]); 
 
     const renderColaboratorPayments = (colaboratori: { id: string; plata: number }[]) => {
         if (!colaboratori || colaboratori.length === 0) {
@@ -164,16 +155,16 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
         ));
       };
 
-      const calculateTotalCosturiColaboratori = () => {
+      const calculateTotalCosturiColaboratori = (data: Spectacol[]) => {
         let totalCost = 0;
-        spectacole.forEach((spectacol) => {
+        data.forEach((spectacol) => {
           totalCost += calculateTotalCosturiPerShow(spectacol.colaboratori);
         });
         return totalCost;
       };
 
-      const calculateTotalSalariiAngajati = () => {
-        return angajati.reduce((total, angajat) => total + (angajat.salariu_brut ?? 0), 0);
+      const calculateTotalSalariiAngajati = (data: Artist[]) => {
+        return data.reduce((total, angajat) => total + (angajat.salariu_brut ?? 0), 0);
       };
 
       const calculateTotalCosturiPerShow = (colaboratori: { id: string; plata: number }[]) => {
@@ -181,40 +172,38 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
         return colaboratori.reduce((total, colaborator) => total + (colaborator.plata || 0), 0);
       };
 
-      const handleDataSearch = () => {
-        if (selectedDataDates) {
-          const [startDate, endDate] = selectedDataDates;
-          fetchSpectacoleData(startDate.format('DD-MM-YYYY'), endDate.format('DD-MM-YYYY'));
-        } else {
-          message.info('Selectați un interval de date pentru căutare.');
-        }
-      };
-
-      const handleDataResetFilters = () => {
-        setSelectedDataDates(null);
-        fetchSpectacoleData();
-      };
-
 
     if (!canView) {
         return <Typography.Text>Nu aveți permisiunea de a vizualiza această secțiune.</Typography.Text>;
     }
 
-    const angajatiColumns = [
-        { title: 'Nume', dataIndex: 'nume', key: 'nume',  sorter: (a: Artist, b: Artist) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' as const, width: 50 },
-        { title: 'Prenume', dataIndex: 'prenume', key: 'prenume', width: 50 },
-        { title: 'Salariu net (lei)', dataIndex: 'salariu_net', key: 'salariu_net', align: 'right' as const, render: (salariu: number | undefined) => salariu ?? '-', width: 20 },
-        { title: 'Impozite (lei)', dataIndex: 'impozite', key: 'impozite', align: 'right' as const, render: (impozit: number | undefined) => impozit ?? '-', width: 20 },
-        { title: 'Salariu brut (lei)', dataIndex: 'salariu_brut', key: 'salariu_brut', align: 'right' as const, render: (salariu: number | undefined) => salariu ?? '-', width: 20},
+    const filteredAngajati = angajati.filter(angajat => 
+        angajat.nume.toLowerCase().includes(searchTermAngajati.toLowerCase()) ||
+        angajat.prenume.toLowerCase().includes(searchTermAngajati.toLowerCase())
+    );
 
+    const filteredSpectacole = spectacole.filter(spectacol =>
+        spectacol.titlu.toLowerCase().includes(searchTermSpectacole.toLowerCase())
+    );
+
+    const totalSalariiCalculat = calculateTotalSalariiAngajati(filteredAngajati);
+    const totalColaboratoriCalculat = calculateTotalCosturiColaboratori(filteredSpectacole);
+
+    const angajatiColumns = [
+        { title: 'Nume', dataIndex: 'nume', key: 'nume',  sorter: (a: Artist, b: Artist) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' as const, width: 100 },
+        { title: 'Prenume', dataIndex: 'prenume', key: 'prenume', width: 100 },
+        { title: 'Salariu net (lei)', dataIndex: 'salariu_net', key: 'salariu_net', render: (salariu: number | undefined) => salariu ?? '-', width: 50 },
+        { title: 'Impozite (lei)', dataIndex: 'impozite', key: 'impozite', render: (impozit: number | undefined) => impozit ?? '-', width: 50 },
+        { title: 'Salariu brut (lei)', dataIndex: 'salariu_brut', key: 'salariu_brut', align: 'right' as const, render: (salariu: number | undefined) => salariu ?? '-', width: 50},
     ];
 
     const spectacoleColumns = [
         { title: 'Spectacol', dataIndex: 'titlu', key: 'titlu',  sorter: (a: Spectacol, b: Spectacol) => a.titlu.localeCompare(b.titlu), defaultSortOrder: 'ascend' as const, width: 150},
-        { title: 'Data', dataIndex: 'data', key: 'data', width: 150  },
+        { title: 'Data', dataIndex: 'data', key: 'data', width: 150  }, 
         {
-            title: 'Costuri',
+            title: 'Costuri colaboratori', 
             dataIndex: 'colaboratori',
+            key: 'costuriColaboratori',
             render: (colaboratori: { id: string; plata: number }[]) => (
                 <ul style={{ paddingLeft: 0, listStyle: 'none', textAlign: 'left', display: 'inline-block', margin: 0 }}>
                     {renderColaboratorPayments(colaboratori)}
@@ -222,33 +211,41 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
             ),
         },
         {
-            title: 'Costuri per spectacol (lei)',
+            title: 'Per spectacol  (lei)', 
             dataIndex: 'colaboratori',
-            key: 'totalCosturi',
+            key: 'totalCosturiColaboratori',
             align: 'right' as const,
-            render: (colaboratori: { id: string; plata: number }[]) => `${calculateTotalCosturiPerShow(colaboratori)} lei`,
+            render: (colaboratori: { id: string; plata: number }[]) => `${calculateTotalCosturiPerShow(colaboratori)}`,
         },
     ];
 
 
     return (
         <div>
-
             <div style={{ 
                 position: 'sticky', 
                 top: 0, 
                 zIndex: 10, 
                 backgroundColor: 'white', 
                 padding: '10px 0', 
+                borderBottom: '1px solid #f0f0f0',
                 textAlign: 'right' 
             }}>
-                <Typography.Title level={4} style={{ margin: 0 }}> 
-                    Total costuri: {calculateTotalSalariiAngajati() + calculateTotalCosturiColaboratori()} lei
+                <Typography.Title level={3} style={{ margin: 0 }}> 
+                    Total costuri: {(totalSalariiCalculat + totalColaboratoriCalculat)} lei
                 </Typography.Title>
             </div>
-            <Typography.Title level={5}>Salarii angajați</Typography.Title>
+
+            <Typography.Title level={5} style={{ marginTop: 24 }}>Salarii angajați</Typography.Title>
+            <Input.Search
+                placeholder="Căutare după nume/prenume"
+                allowClear
+                onChange={(e) => setSearchTermAngajati(e.target.value)}
+                onSearch={(value) => setSearchTermAngajati(value)}
+                style={{ marginBottom: 16, width: 300 }}
+            />
             <Table
-                dataSource={angajati}
+                dataSource={filteredAngajati}
                 columns={angajatiColumns}
                 loading={loadingAngajati}
                 rowKey="id"
@@ -257,27 +254,22 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
                 scroll={{ x: 'max-content' }}
                 footer={() => (
                     <div style={{ textAlign: 'right' }}>
-                        <Typography.Text strong>Total: {calculateTotalSalariiAngajati()} lei</Typography.Text>
+                        <Typography.Text strong>Total salarii brute: {totalSalariiCalculat} lei</Typography.Text>
                     </div>
                 )}
             />
 
-            <Typography.Title level={5} style={{ marginTop: 24 }}>Costuri colaboratori</Typography.Title>
-            <Space direction="horizontal" size={10} style={{ marginBottom: 5 }}>
-                <DatePicker.RangePicker
-                    format="DD-MM-YYYY"
-                    value={selectedDataDates}
-                    onChange={(dates) => setSelectedDataDates(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
-                />
-                <Button onClick={handleDataSearch} disabled={!selectedDataDates}>
-                    Căutare
-                </Button>
-                <Button onClick={handleDataResetFilters}>
-                    Resetare
-                </Button>
-            </Space>
+            <Typography.Title level={5} style={{ marginTop: 24 }}>Costuri colaboratori per spectacol</Typography.Title>
+   
+            <Input.Search
+                placeholder="Cautare după titlu spectacol"
+                allowClear
+                onChange={(e) => setSearchTermSpectacole(e.target.value)}
+                onSearch={(value) => setSearchTermSpectacole(value)}
+                style={{ marginBottom: 16, width: 300 }}
+            />
             <Table
-                dataSource={spectacole}
+                dataSource={filteredSpectacole}
                 loading={loadingSpectacole}
                 columns={spectacoleColumns}
                 pagination={{ pageSize: 10, hideOnSinglePage: true }}
@@ -286,11 +278,10 @@ const Costuri: React.FC<CosturiProps> = ({ userId, userRole }) => {
                 scroll={{ x: 'max-content' }}
                 footer={() => (
                     <div style={{ textAlign: 'right' }}>
-                        <Typography.Text strong>Total: {calculateTotalCosturiColaboratori()} lei</Typography.Text>
+                        <Typography.Text strong>Total costuri colaboratori: {totalColaboratoriCalculat} lei</Typography.Text>
                     </div>
                 )}
             />
-
         </div>
     );
 };
