@@ -306,12 +306,12 @@ const Artisti: React.FC<ActoriProps> = ({ userId, userRole }) => {
   };
 
   const baseColumns: TableProps<ActorType>['columns'] = [
-    { title: 'Nume', dataIndex: 'nume', key: 'nume',  width: 150, sorter: (a, b) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' },
-    { title: 'Prenume', dataIndex: 'prenume', key: 'prenume',  width: 150 },
+    { title: 'Nume', dataIndex: 'nume', key: 'nume',  width: 100, sorter: (a, b) => a.nume.localeCompare(b.nume), defaultSortOrder: 'ascend' },
+    { title: 'Prenume', dataIndex: 'prenume', key: 'prenume',  width: 100 },
     { title: 'Email', dataIndex: 'email', key: 'email', width: 200, render: (email) => email || '-' },
-    { title: 'Profesia', dataIndex: 'profesie', key: 'profesie',  width: 150 },
-    { title: 'Funcția', dataIndex: 'functie', key: 'functie',  width: 150 },
-    { title: 'Tip contract', dataIndex: 'tip_contract', key: 'tip_contract',  width: 150, render: (tip_contract) => tip_contract || '-' },
+    { title: 'Profesia', dataIndex: 'profesie', key: 'profesie',  width: 100 },
+    { title: 'Funcția', dataIndex: 'functie', key: 'functie',  width: 100 },
+    { title: 'Tip contract', dataIndex: 'tip_contract', key: 'tip_contract',  width: 100, render: (tip_contract) => tip_contract || '-' },
   ];
 
   const actionColumn: TableProps<ActorType>['columns'] = [
